@@ -37,7 +37,7 @@ export class Schema {
       const changes = this._internalChangeTree.takeAll();
 
       // Number of changes
-      buf.writeUInt8(changes.length, ref.value);
+      buf.writeUInt8(changes.length, ref.value); // TODO Use serializer here
       ref.value += 1;
 
       for (const change of changes) {
