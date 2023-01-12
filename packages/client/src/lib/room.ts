@@ -52,12 +52,18 @@ type OnItemChangeCallback = (
 export class Room {
   private _id!: string;
   private _sendBuffer: Buffer;
-  public get id(): string {
+  private _closeReason: string | undefined;
+
+  get closeReason(): string | undefined {
+    return this._closeReason;
+  }
+
+  get id(): string {
     return this._id;
   }
 
   private _state: any;
-  public get state(): any {
+  get state(): any {
     return this._state;
   }
 
@@ -196,6 +202,17 @@ export class Room {
         for (const callback of this._serverErrorCallbacks) {
           callback.call(undefined, error);
         }
+
+        break;
+      case ServerProtocol.CloseReason:
+        const reason = deserializeString(buf, ref);
+        console.log('[CLOSE REASON]', reason);
+
+        if (this._connectResultCallback) {
+          this._connectResultCallback?.call(undefined, reason);
+        }
+
+        this._closeReason = reason;
 
         break;
       default:
