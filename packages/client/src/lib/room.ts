@@ -373,7 +373,7 @@ export class Room {
           console.log(`Inserted ${index} =`, insertedState);
           // Set map[index] = created state object.
           map.set(index, insertedState);
-          // TODO Invoke callbacks here?
+          // Invoke callbacks here
           for (const callback of state[key].__daisy.arrayOnAddedCallbacks)
             callback(index, insertedState);
         }
@@ -385,7 +385,7 @@ export class Room {
           const insertedValue = serializer?.[1](buf, ref);
           // Set map[index] = value
           map.set(index, insertedValue);
-          // TODO Invoke callbacks here?
+          // Invoke callbacks
           for (const callback of state[key].__daisy.arrayOnAddedCallbacks)
             callback(index, insertedValue);
         }
@@ -425,7 +425,7 @@ export class Room {
           const updatedValue = serializer?.[1](buf, ref);
           // Set map[index] = value
           map.set(index, updatedValue);
-          // TODO Invoke callbacks here?
+          // Invoke callbacks here
           for (const callback of state[key].__daisy.arrayOnItemChangeCallbacks)
             callback(index, oldValue, updatedValue);
         }
@@ -469,7 +469,7 @@ export class Room {
           const oldValue = state[key];
           const newValue = serializer?.[1](buf, ref);
           state[key] = newValue;
-          // TODO Invoke callbacks here?
+          // Invoke callbacks here
           for (const callback of state.__daisy.onChangeCallbacks)
             callback(key, oldValue, newValue);
         }
