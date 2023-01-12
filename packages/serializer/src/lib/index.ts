@@ -2,6 +2,7 @@ export * from './serializers';
 export { Schema } from './schema';
 export { ArraySchema } from './array-schema';
 export { sync } from './sync';
+export { ArrayChangeTree, ChangeTree, ArrayChangeType } from './change-tree';
 
 export interface Changed {
   key: string;

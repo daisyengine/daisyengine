@@ -1,6 +1,5 @@
 import { Schema } from './schema';
 import { registeredSerializers } from './serializers';
-import { ArraySchema } from './array-schema';
 import { SchemaData } from './schema-data';
 
 const dataMap = new Map<Function, SchemaData>();

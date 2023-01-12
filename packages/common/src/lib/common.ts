@@ -1,8 +1,3 @@
-export enum PacketType {
-  User,
-  Engine,
-}
-
 export enum ServerProtocol {
   UserPacket = 0,
   RoomSchemaDefinition = 1,

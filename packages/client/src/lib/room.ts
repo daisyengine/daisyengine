@@ -1,16 +1,14 @@
 import { ClientProtocol, ServerProtocol } from '@daisyengine/common';
 import {
-  deserializeInt16,
+  ArrayChangeType,
   deserializeString,
   deserializeUInt16,
   deserializeUInt8,
   NumberRef,
   registeredSerializers,
-  Schema,
   serializeString,
   serializeUInt8,
 } from '@daisyengine/serializer';
-import { ArrayChangeType } from 'packages/serializer/src/lib/change-tree';
 import Networking from './networking';
 
 type MessageHandler = (message: Buffer | string) => void;

@@ -1,7 +1,5 @@
 import { ClientStatus, NetworkClient } from './network-client';
-import { EventEmitter } from 'eventemitter3';
 import {
-  ArraySchema,
   deserializeString,
   deserializeUInt8,
   NumberRef,
@@ -10,10 +8,10 @@ import {
   serializeString,
   serializeUInt8,
 } from '@daisyengine/serializer';
-import { Server } from './server';
-import { PacketType, ServerProtocol } from '@daisyengine/common';
+import { ServerProtocol } from '@daisyengine/common';
 
 const buf = Buffer.alloc(1024000); // Packet size can NOT exceed 1mb.
+// ^ TODO Let user configure this
 
 type MessageHandler = (client: NetworkClient, message: Buffer | string) => void;
 
