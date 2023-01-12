@@ -1,4 +1,4 @@
-# Daisy Engine\
+# Daisy Engine
 A multiplayer server engine in TypeScript, inspired by Colyseus.
 
 ## ⚠️ WORK IN PROGRESS
