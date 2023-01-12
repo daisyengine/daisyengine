@@ -1,9 +1,9 @@
-import { ClientProtocol } from '@daisyengine/common';
+import { ClientProtocol } from '@daisy-engine/common';
 import {
   NumberRef,
   serializeUInt8,
   serializeString,
-} from '@daisyengine/serializer';
+} from '@daisy-engine/serializer';
 import { Room } from './room';
 
 export class Client {

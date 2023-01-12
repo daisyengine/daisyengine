@@ -7,8 +7,8 @@ import {
   SchemaData,
   serializeString,
   serializeUInt8,
-} from '@daisyengine/serializer';
-import { ServerProtocol } from '@daisyengine/common';
+} from '@daisy-engine/serializer';
+import { ServerProtocol } from '@daisy-engine/common';
 
 const buf = Buffer.alloc(1024000); // Packet size can NOT exceed 1mb.
 // ^ TODO Let user configure this

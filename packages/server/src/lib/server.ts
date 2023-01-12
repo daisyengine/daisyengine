@@ -1,10 +1,10 @@
-import { ClientProtocol } from '@daisyengine/common';
+import { ClientProtocol } from '@daisy-engine/common';
 import {
   deserializeString,
   deserializeUInt8,
   NumberRef,
   Schema,
-} from '@daisyengine/serializer';
+} from '@daisy-engine/serializer';
 import { ClientStatus, NetworkClient } from './network-client';
 import { Room } from './room';
 import { WebSocketServer } from './websocket-server';

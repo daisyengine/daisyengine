@@ -16,10 +16,10 @@
     "skipDefaultLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@daisyengine/client": ["packages/client/src/index.ts"],
-      "@daisyengine/common": ["packages/common/src/index.ts"],
-      "@daisyengine/serializer": ["packages/serializer/src/index.ts"],
-      "@daisyengine/server": ["packages/server/src/index.ts"]
+      "@daisy-engine/server": ["packages/server/src/index.ts"],
+      "@daisy-engine/client": ["packages/client/src/index.ts"],
+      "@daisy-engine/common": ["packages/common/src/index.ts"],
+      "@daisy-engine/serializer": ["packages/serializer/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]

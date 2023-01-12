@@ -1,4 +1,4 @@
-import { ClientProtocol, ServerProtocol } from '@daisyengine/common';
+import { ClientProtocol, ServerProtocol } from '@daisy-engine/common';
 import {
   ArrayChangeType,
   deserializeString,
@@ -8,7 +8,7 @@ import {
   registeredSerializers,
   serializeString,
   serializeUInt8,
-} from '@daisyengine/serializer';
+} from '@daisy-engine/serializer';
 import Networking from './networking';
 
 type MessageHandler = (message: Buffer | string) => void;

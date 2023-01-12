@@ -1,9 +1,9 @@
-import { ServerProtocol } from '@daisyengine/common';
+import { ServerProtocol } from '@daisy-engine/common';
 import {
   NumberRef,
   serializeString,
   serializeUInt8,
-} from '@daisyengine/serializer';
+} from '@daisy-engine/serializer';
 import * as uWS from 'uWebSockets.js';
 import { Room } from './room';
 
