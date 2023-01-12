@@ -9,21 +9,19 @@ export class Schema {
   /** @internal */
   _internalValues: Map<number, any> = new Map();
   /** @internal */
-  _internalDirtyProps = new Set<number>();
-  /** @internal */
   _internalChangeTree = new ChangeTree();
   /** @internal */
   _internalOnDirty?: () => void;
-  /** @internal */
-  _internalIsDirty: boolean = false;
+
+  private _isDirty: boolean = false;
 
   /**
    * Marks this schema for serialization
    */
   markDirty() {
     // Mark us dirty if we are not already dirty
-    if (!this._internalIsDirty) {
-      this._internalIsDirty = true;
+    if (!this._isDirty) {
+      this._isDirty = true;
       this._internalOnDirty?.call(undefined);
     }
   }
@@ -69,7 +67,7 @@ export class Schema {
         }
       }
       // Set isDirty to false after every normal serialization
-      this._internalIsDirty = false;
+      this._isDirty = false;
     } else {
       // Serialize everything
       buf.writeUInt8(this._internalValues.size, ref.value);
