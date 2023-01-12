@@ -118,34 +118,6 @@ export class Server {
         break;
       }
 
-      case ClientProtocol.CreateRoom: {
-        if (client.status !== ClientStatus.CONNECTED) {
-          client.close(0, 'bad request');
-          break;
-        }
-        // Create new room
-        client.status = ClientStatus.JOINING;
-
-        const authString = deserializeString(buf, ref);
-        const templateName = deserializeString(buf, ref);
-
-        if (!this._roomTemplates.has(templateName)) {
-          client.close(0, 'unknown template');
-          break;
-        }
-
-        try {
-          const room = this.createRoom('sample_room_id', templateName);
-
-          room.onClientAuth(client, authString);
-          this._joinOrClose(client, authString, room);
-        } catch (e) {
-          client.close(0, e.message);
-          throw e;
-        }
-        break;
-      }
-
       case ClientProtocol.UserPacket:
         if (client.status !== ClientStatus.JOINED) {
           client.close(0, 'bad request');
