@@ -284,21 +284,21 @@ export class Room {
           'get',
           'triggerCallbacks',
         ].includes(item);
-      });
+      }); // TODO Don't hardcode these
 
-      console.log(keys);
+      //console.log(keys);
       // Trigger Schema callbacks
       for (const key of keys) {
         for (const callback of state.__daisy.onChangeCallbacks) {
           if (typeof state[key] === 'object') continue;
-          console.log(key);
+          //console.log(key);
           callback(key, undefined, state[key]);
         }
       }
 
       // Trigger ArraySchema callbacks
       for (const [index, value] of state.__daisy.arraySchemaStates) {
-        console.log(index, value);
+        //console.log(index, value);
         for (const callback of state.__daisy.arrayOnAddedCallbacks) {
           callback(index, value);
         }
@@ -342,7 +342,7 @@ export class Room {
 
     // Create object for ArraySchema if it doesn't exist
     if (!state[key]) {
-      console.log(`Create new state for key ${key}`);
+      //console.log(`Create new state for key ${key}`);
       state[key] = this._createEmptyState();
     }
 
@@ -370,7 +370,7 @@ export class Room {
             buf,
             ref
           );
-          console.log(`Inserted ${index} =`, insertedState);
+          //console.log(`Inserted ${index} =`, insertedState);
           // Set map[index] = created state object.
           map.set(index, insertedState);
           // Invoke callbacks here
@@ -475,102 +475,6 @@ export class Room {
         }
       }
     }
-
-    //   // If data is ArraySchema of `dataType`.
-    //   if (definition.arraySchemaIds.has(propId)) {
-    //     // Make sure arraySchemaStates[propId] exists
-    //     const array = state[key].__daisy.arraySchemaStates;
-    //     const changesLength = deserializeInt16(buf, ref);
-
-    //     for (let i = 0; i < changesLength; i++) {
-    //       const itemIndex = deserializeUInt16(buf, ref);
-    //       const changeType = <ArrayChangeType>deserializeUInt8(buf, ref);
-    //       switch (changeType) {
-    //         case ArrayChangeType.Insert:
-    //             // Callbacks
-    //             for (const callback of state[key].__daisy
-    //               .arrayOnAddedCallbacks) {
-    //               callback.call(undefined, itemState, itemIndex);
-    //             }
-    //           } else {
-    //             // Add primitive value
-    //             const serializer = registeredSerializers.get(dataType);
-    //             const newValue = serializer?.[1](buf, ref);
-    //             array.set(itemIndex, newValue);
-    //             // Callbacks
-    //             for (const callback of state[key].__daisy
-    //               .arrayOnAddedCallbacks) {
-    //               callback.call(undefined, newValue, itemIndex);
-    //             }
-    //           }
-    //           break;
-    //         case ArrayChangeType.Update:
-    //           if (dataType === '$schema') {
-    //             console.log('_internalDeserializeState: Changes.Update', key);
-    //             // Update Schema value
-    //             const itemState = array.get(itemIndex);
-    //             console.log(itemIndex, itemState, key, state[key]);
-    //             this._internalDeserializeState(
-    //               itemState,
-    //               <SchemaDefinition>definition.childDefinitions.get(propId),
-    //               buf,
-    //               ref
-    //             );
-    //             // Update value of arraySchemaStates[propId][itemIndex]
-    //             // array.set(itemIndex, itemState);
-    //             // ^ Not needed because objects are passed as refs in js
-    //             // Callbacks
-    //             // DESIGN: No callbacks for modifications if item is a Schema.
-    //             // Schema.onChange should be used instead.
-    //           } else {
-    //             // Update primitive value
-    //             const serializer = registeredSerializers.get(dataType);
-    //             const oldValue = array.get(itemIndex);
-    //             const newValue = serializer?.[1](buf, ref);
-    //             array.set(itemIndex, newValue);
-    //             // Callbacks
-    //             for (const callback of state[key].__daisy
-    //               .arrayOnItemChangeCallbacks) {
-    //               callback.call(undefined, oldValue, newValue, itemIndex);
-    //             }
-    //           }
-    //           break;
-    //         case ArrayChangeType.Delete:
-    //           const value = array.get(itemIndex);
-    //           array.delete(itemIndex);
-    //           // Callbacks
-    //           for (const callback of state[key].__daisy
-    //             .arrayOnRemovedCallbacks) {
-    //             callback.call(undefined, value, itemIndex);
-    //           }
-    //           break;
-    //         default:
-    //           break;
-    //       }
-    //     }
-    //   }
-    //   // If data is just `dataType` (Schema or Primitive)
-    //   else {
-    //     // Schema or primitive
-    //     if (dataType === '$schema') {
-    //       this._internalDeserializeState(
-    //         state[key],
-    //         <SchemaDefinition>definition.childDefinitions.get(propId),
-    //         buf,
-    //         ref
-    //       );
-    //       continue;
-    //     }
-    //     const serializer = registeredSerializers.get(dataType);
-    //     const oldValue = state[key];
-    //     const newValue = serializer?.[1](buf, ref);
-    //     state[key] = newValue;
-    //     changes.add({ key, oldValue, newValue });
-    //   }
-    // }
-    // for (const callback of state.__daisy.onChangeCallbacks) {
-    //   callback.call(undefined, changes);
-    // }
   }
 
   private _defineSchema(
