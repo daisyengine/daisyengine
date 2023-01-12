@@ -1,0 +1,26 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "rootDir": ".",
+    "sourceMap": true,
+    "declaration": false,
+    "moduleResolution": "node",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "forceConsistentCasingInFileNames": false,
+    "importHelpers": true,
+    "target": "es2015",
+    "module": "esnext",
+    "lib": ["es2017", "dom"],
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@daisyengine/client": ["packages/client/src/index.ts"],
+      "@daisyengine/common": ["packages/common/src/index.ts"],
+      "@daisyengine/serializer": ["packages/serializer/src/index.ts"],
+      "@daisyengine/server": ["packages/server/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "tmp"]
+}
