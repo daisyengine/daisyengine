@@ -12,6 +12,8 @@ import { execSync } from 'child_process';
 import { readFileSync, writeFileSync } from 'fs';
 import chalk from 'chalk';
 
+const root = process.cwd();
+
 function invariant(condition, message) {
   if (!condition) {
     console.error(chalk.bold.red(message));
@@ -38,15 +40,11 @@ invariant(
   `Could not find project "${name}" in the workspace. Is the project.json configured correctly?`
 );
 
-const outputPath = project.data?.targets?.build?.options?.outputPath;
-invariant(
-  outputPath,
-  `Could not find "build.options.outputPath" of project "${name}". Is project.json configured  correctly?`
-);
+const projectPath = project.data.root;
 
-process.chdir(outputPath);
+process.chdir(projectPath);
 
-// Updating the version in "package.json" before publishing
+// Updating the version in "package.json" before building
 try {
   const json = JSON.parse(readFileSync(`package.json`).toString());
   json.version = version;
@@ -56,6 +54,18 @@ try {
     chalk.bold.red(`Error reading package.json file from library build output.`)
   );
 }
+
+process.chdir(root);
+
+execSync(`nx build ${project.name}`);
+
+const outputPath = project.data?.targets?.build?.options?.outputPath;
+invariant(
+  outputPath,
+  `Could not find "build.options.outputPath" of project "${name}". Is project.json configured  correctly?`
+);
+
+process.chdir(outputPath);
 
 // Execute "npm publish" to publish
 execSync(`npm publish --access public --tag ${tag}`);

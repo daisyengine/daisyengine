@@ -1,4 +1,6 @@
 {
   "name": "@daisy-engine/server",
-  "version": "0.0.1"
+  "version": "0.1.0-experiment3",
+  "author": "Tufan Meriç Uyguner",
+  "license": "MIT"
 }

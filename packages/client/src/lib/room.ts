@@ -9,7 +9,7 @@ import {
   serializeString,
   serializeUInt8,
 } from '@daisy-engine/serializer';
-import Networking from './networking';
+import { Networking } from './networking';
 
 type MessageHandler = (message: Buffer | string) => void;
 
@@ -27,17 +27,6 @@ interface SchemaDefinitionJSON {
   arraySchemaIds: number[];
   types: { [key: number]: string };
   childDefinitions: { [key: number]: SchemaDefinitionJSON };
-}
-
-interface Changed {
-  key: string;
-  oldValue: any;
-  newValue: any;
-}
-
-interface ArraySchemaOperation {
-  oldValue?: any;
-  newValue?: any;
 }
 
 type OnChangeCallback = (key: string, oldValue: any, newValue: any) => void;
@@ -455,6 +444,11 @@ export class Room {
 
         // If value is Schema
         if (dataType === '$schema') {
+          // Make sure state[key] exists. This allows Schema inside ArraySchema
+          // to have child Schema. Too much nesting, need to improve readability
+          // because even I don't know why some things work the way they do.
+          state[key] = state[key] || this._createEmptyState();
+
           // Deserialize schema value into state[key]
           this._deserializeSchema(
             state[key],

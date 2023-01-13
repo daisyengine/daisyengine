@@ -1,4 +1,4 @@
-export default class Networking {
+export class Networking {
   private _ws?: WebSocket;
 
   onOpen?: (e: Event) => void;

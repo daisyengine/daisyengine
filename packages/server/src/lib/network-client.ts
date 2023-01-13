@@ -49,6 +49,18 @@ export class NetworkClient {
    */
   lastSentStateUpdateTick: number = Number.NEGATIVE_INFINITY;
 
+  /**
+   * Custom data associated with this NetworkClient. You may set this to
+   * anything.
+   */
+  data: any;
+
+  /**
+   * Custom auth data associated with this NetworkClient. You may set this to
+   * anything.
+   */
+  auth: any;
+
   constructor(ws: uWS.WebSocket, id: number) {
     this._ws = ws;
 

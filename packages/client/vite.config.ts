@@ -1,51 +1,56 @@
 import { defineConfig } from 'vite';
+
 import viteTsConfigPaths from 'vite-tsconfig-paths';
 import dts from 'vite-plugin-dts';
 import { join } from 'path';
-import { splitVendorChunkPlugin } from 'vite';
+export default () => {
+  console.log(join(__dirname, 'tsconfig.lib.json'));
+  return defineConfig({
+    plugins: [
+      dts({
+        tsConfigFilePath: join(__dirname, 'tsconfig.lib.json'),
+        // Faster builds by skipping tests. Set this to false to enable type checking.
+        skipDiagnostics: true,
+        insertTypesEntry: true,
+      }),
 
-export default defineConfig({
-  plugins: [
-    dts({
-      tsConfigFilePath: join(__dirname, 'tsconfig.lib.json'),
-      // Faster builds by skipping tests. Set this to false to enable type checking.
-      skipDiagnostics: true,
-    }),
+      viteTsConfigPaths({
+        root: '../../',
+      }),
+    ],
 
-    viteTsConfigPaths({
-      root: '../../',
-    }),
-    splitVendorChunkPlugin(),
-  ],
-
-  // Configuration for building your library.
-  // See: https://vitejs.dev/guide/build.html#library-mode
-  build: {
-    lib: {
-      // Could also be a dictionary or array of multiple entry points.
-      entry: 'src/index.ts',
-      name: 'Daisy',
-      fileName: 'index',
-      // Change this to the formats you want to support.
-      // Don't forgot to update your package.json as well.
-      formats: ['es', 'cjs', 'umd'],
-    },
-    rollupOptions: {
-      // External packages that should not be bundled into your library.
-      external: [],
-      output: {
-        preserveModules: false,
-        inlineDynamicImports: true,
+    // Configuration for building your library.
+    // See: https://vitejs.dev/guide/build.html#library-mode
+    build: {
+      lib: {
+        // Could also be a dictionary or array of multiple entry points.
+        entry: 'src/index.ts',
+        name: 'client',
+        fileName: 'index',
+        // Change this to the formats you want to support.
+        // Don't forgot to update your package.json as well.
+        formats: ['es', 'cjs', 'umd'],
+      },
+      rollupOptions: {
+        // External packages that should not be bundled into your library.
+        external: [],
+        output: {
+          // Provide global variables to use in the UMD build
+          // for externalized deps
+          globals: {
+            client: 'Client',
+          },
+        },
       },
     },
-  },
 
-  test: {
-    globals: true,
-    cache: {
-      dir: '../../node_modules/.vitest',
+    test: {
+      globals: true,
+      cache: {
+        dir: '../../node_modules/.vitest',
+      },
+      environment: 'jsdom',
+      include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     },
-    environment: 'jsdom',
-    include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-  },
-});
+  });
+};

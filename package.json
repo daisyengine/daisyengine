@@ -2,6 +2,7 @@
   "name": "daisy-engine",
   "version": "0.0.0",
   "license": "MIT",
+  "author": "Tufan Meriç Uyguner",
   "scripts": {},
   "private": true,
   "devDependencies": {
@@ -11,8 +12,8 @@
     "@nrwl/js": "15.4.2",
     "@nrwl/linter": "15.4.2",
     "@nrwl/node": "15.4.2",
-    "@nrwl/vite": "15.4.2",
-    "@nrwl/web": "^15.4.2",
+    "@nrwl/vite": "15.4.4",
+    "@nrwl/web": "15.4.4",
     "@nrwl/webpack": "15.4.2",
     "@nrwl/workspace": "15.4.2",
     "@rollup/plugin-inject": "^5.0.3",
