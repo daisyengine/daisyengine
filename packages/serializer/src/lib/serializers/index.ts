@@ -1,3 +1,4 @@
+import { deserializeBoolean, serializeBoolean } from './bool';
 import { serializeFloat32, deserializeFloat32 } from './float32';
 import { serializeInt16, deserializeInt16 } from './int16';
 import { serializeInt32, deserializeInt32 } from './int32';
@@ -17,6 +18,7 @@ export { serializeUInt32, deserializeUInt32 };
 export { serializeFloat32, deserializeFloat32 };
 export { serializeString, deserializeString };
 export { serializeJson, deserializeJson };
+export { serializeBoolean, deserializeBoolean };
 
 /**
  * A map of registered serializers, used by `@sync(key)`
@@ -31,4 +33,5 @@ export const registeredSerializers = new Map<string, [Function, Function]>([
   ['float32', [serializeFloat32, deserializeFloat32]],
   ['json', [serializeJson, deserializeJson]],
   ['string', [serializeString, deserializeString]],
+  ['bool', [serializeBoolean, deserializeBoolean]],
 ]);
