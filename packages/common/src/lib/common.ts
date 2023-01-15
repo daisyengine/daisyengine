@@ -3,8 +3,10 @@ export enum ServerProtocol {
   RoomSchemaDefinition = 1,
   RoomState = 2,
   RoomInfo = 3,
-  Error = 4,
-  CloseReason = 5,
+  ClientId = 4,
+
+  Error = 50,
+  CloseReason = 51,
 
   Ping = 255,
 }

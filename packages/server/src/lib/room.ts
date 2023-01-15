@@ -6,6 +6,7 @@ import {
   Schema,
   SchemaData,
   serializeString,
+  serializeUInt32,
   serializeUInt8,
 } from '@daisy-engine/serializer';
 import { ServerProtocol } from '@daisy-engine/common';
@@ -205,6 +206,7 @@ export class Room<T extends Schema> {
    * @internal
    */
   _internalOnOpen(client: NetworkClient) {
+    this._sendClientId(client);
     this._sendSchemaDefinition(client);
     this._sendFullState(client);
     this._sendRoomInfo(client);
@@ -398,6 +400,19 @@ export class Room<T extends Schema> {
       client.lastSentStateUpdateTick = this._lastStateChange;
       client._internalSend(byteArray);
     }
+  }
+
+  /**
+   * Sends a client its ID.
+   * @param client
+   */
+  private _sendClientId(client: NetworkClient) {
+    const ref: NumberRef = { value: 0 };
+
+    serializeUInt8(ServerProtocol.ClientId, buf, ref);
+    serializeUInt32(client.id, buf, ref);
+
+    client._internalSend(buf.subarray(0, ref.value));
   }
 
   /**

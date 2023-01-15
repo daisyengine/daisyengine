@@ -3,6 +3,7 @@ import {
   ArrayChangeType,
   deserializeString,
   deserializeUInt16,
+  deserializeUInt32,
   deserializeUInt8,
   NumberRef,
   registeredSerializers,
@@ -42,6 +43,10 @@ export class Room {
   private _id!: string;
   private _sendBuffer: Buffer;
   private _closeReason: string | undefined;
+  private _localClientId: number = -1;
+  public get localClientId(): number {
+    return this._localClientId;
+  }
 
   get closeReason(): string | undefined {
     return this._closeReason;
@@ -177,8 +182,10 @@ export class Room {
           buf,
           ref
         );
-        //console.log(this.state);
 
+        break;
+      case ServerProtocol.ClientId:
+        this._localClientId = deserializeUInt32(buf, ref);
         break;
       case ServerProtocol.Error:
         const error = deserializeString(buf, ref);
