@@ -36,7 +36,7 @@ export class Room<T extends Schema> {
   private _tickNumber: number;
   private _lastTime: number;
   private _accumulator: number;
-  private _deltaTime: number;
+  private _deltaTimeMs: number;
   private _maxAccumulation: number = 25;
   private _stopTicking: boolean;
   private _lastStateChange: number = -1;
@@ -56,10 +56,16 @@ export class Room<T extends Schema> {
     return this._accumulator;
   }
   /**
-   * Fixed time between ticks, in milliseconds.
+   * Fixed time between ticks, in seconds.
    */
   get deltaTime(): number {
-    return this._deltaTime;
+    return this._deltaTimeMs / 1000;
+  }
+  /**
+   * Fixed time between ticks, in milliseconds.
+   */
+  get deltaTimeMs(): number {
+    return this._deltaTimeMs;
   }
 
   constructor(id: string, opts?: any) {
@@ -92,7 +98,7 @@ export class Room<T extends Schema> {
    */
   setTickRate(ticksPerSecond: number) {
     if (ticksPerSecond <= 0) this._disableBuiltinTicker = true;
-    this._deltaTime = 1000 / ticksPerSecond;
+    this._deltaTimeMs = 1000 / ticksPerSecond;
   }
 
   /**
@@ -300,13 +306,13 @@ export class Room<T extends Schema> {
     this._lastTime = newTime;
     this._accumulator += frameTime;
 
-    while (this._accumulator >= this._deltaTime) {
+    while (this._accumulator >= this._deltaTimeMs) {
       if (this._stopTicking || this._disableBuiltinTicker) return;
 
       this.tick();
       this.sendStateUpdates();
 
-      this._accumulator -= this._deltaTime;
+      this._accumulator -= this._deltaTimeMs;
       this._tickNumber++;
     }
 
