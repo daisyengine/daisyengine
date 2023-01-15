@@ -1,6 +1,6 @@
 {
   "name": "@daisy-engine/client",
-  "version": "0.1.1-experimental",
+  "version": "0.1.3-experimental",
   "author": "Tufan Meriç Uyguner",
   "license": "MIT",
   "type": "commonjs"

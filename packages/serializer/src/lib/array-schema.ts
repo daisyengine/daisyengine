@@ -8,7 +8,7 @@ import {
 } from './serializers';
 
 export class ArraySchema<T extends Schema | string | number | boolean> {
-  private _items: T[];
+  private _items: { value: T }[];
   private _internalChangeTree: ArrayChangeTree<T>;
   private _isDirty: boolean = false;
 
@@ -29,14 +29,26 @@ export class ArraySchema<T extends Schema | string | number | boolean> {
     for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
       const item = items[itemIndex];
 
-      index = this._items.push(item) - 1;
-      this._internalChangeTree.add(index, ArrayChangeType.Insert, item);
+      const itemObject = { value: item };
+
+      this._internalChangeTree.add(
+        this._items.push(itemObject) - 1, // Newly inserted index
+        ArrayChangeType.Insert,
+        item
+      );
 
       if (item instanceof Schema) {
         // Changes to a child schema marks array schema dirty.
         item._internalOnDirty = () => {
           // Push to change tree
-          this._internalChangeTree.add(index, ArrayChangeType.Update, item);
+          this._internalChangeTree.add(
+            // indexOf() with a reference to the object,
+            // just in case it is primitive.
+            // Because pointers are useless in a language hahaHAHAHA.
+            this._items.indexOf(itemObject),
+            ArrayChangeType.Update,
+            item
+          );
 
           // Mark us dirty if we are not already dirty
           this.markDirty();
@@ -57,7 +69,7 @@ export class ArraySchema<T extends Schema | string | number | boolean> {
   }
 
   get(index: number): T | undefined {
-    return this._items[index];
+    return this._items[index].value;
   }
 
   pop(): T | undefined {
@@ -68,11 +80,13 @@ export class ArraySchema<T extends Schema | string | number | boolean> {
       this._internalChangeTree.add(this._items.length, ArrayChangeType.Delete);
 
       // Remove dirty callback of item if it is a schema
-      if (item instanceof Schema) {
-        (<Schema>item)._internalOnDirty = undefined;
+      if (item.value instanceof Schema) {
+        (<Schema>item.value)._internalOnDirty = undefined;
       }
+      // Mark us dirty
+      this.markDirty();
     }
-    return item;
+    return item?.value;
   }
 
   shift(): T | undefined {
@@ -81,50 +95,60 @@ export class ArraySchema<T extends Schema | string | number | boolean> {
       this._internalChangeTree.add(0, ArrayChangeType.Delete);
 
       // Remove dirty callback of item if it is a schema
-      if (item instanceof Schema) {
-        (<Schema>item)._internalOnDirty = undefined;
+      if (item.value instanceof Schema) {
+        (<Schema>item.value)._internalOnDirty = undefined;
       }
+      // Mark us dirty
+      this.markDirty();
     }
-    return item;
+    return item?.value;
   }
 
   toArray(): T[] {
-    return Array.from(this._items);
+    return this._items.map((item) => item.value);
   }
 
   join(separator?: string | undefined): string {
-    return this._items.join(separator);
+    return this.toArray().join(separator);
   }
 
   set(index: number, newValue: T) {
     if (this._items.length - 1 >= index) {
       // Remove dirty callback of old value if it is a schema
-      if (this._items[index] instanceof Schema) {
-        (<Schema>this._items[index])._internalOnDirty = undefined;
+      if (this._items[index].value instanceof Schema) {
+        (<Schema>this._items[index].value)._internalOnDirty = undefined;
       }
       // Push to change tree
       this._internalChangeTree.add(index, ArrayChangeType.Update, newValue);
-    } else
-      this._internalChangeTree.add(index, ArrayChangeType.Insert, newValue);
+      // Mark us dirty
+      this.markDirty();
+    } else {
+      throw new Error(
+        `Index out of bounds: ${index} >= ${this._items.length}.`
+      );
+    }
 
-    this._items[index] = newValue;
+    this._items[index].value = newValue;
   }
 
   deleteAt(index: number): T[] {
     if (this._items.length - 1 >= index) {
       // Remove dirty callback of item if it is a schema
-      if (this._items[index] instanceof Schema) {
-        (<Schema>this._items[index])._internalOnDirty = undefined;
+      if (this._items[index].value instanceof Schema) {
+        (<Schema>this._items[index].value)._internalOnDirty = undefined;
       }
       // Push to change tree
       this._internalChangeTree.add(index, ArrayChangeType.Delete);
-      return this._items.splice(index, 1);
+      // Mark us dirty
+      this.markDirty();
+      // Return deleted items
+      return this._items.splice(index, 1).map((item) => item.value);
     }
     return [];
   }
 
   delete(item: T): T[] {
-    const index = this._items.indexOf(item);
+    const index = this._items.findIndex((i) => i.value === item);
     if (index !== -1) {
       // Remove dirty callback of value if it is a schema
       if (item instanceof Schema) {
@@ -132,7 +156,10 @@ export class ArraySchema<T extends Schema | string | number | boolean> {
       }
       // Push to change tree
       this._internalChangeTree.add(index, ArrayChangeType.Delete);
-      return this._items.splice(index, 1);
+      // Mark us dirty
+      this.markDirty();
+      // Return deleted items
+      return this._items.splice(index, 1).map((item) => item.value);
     }
     return [];
   }
@@ -181,10 +208,10 @@ export class ArraySchema<T extends Schema | string | number | boolean> {
         serializeUInt8(ArrayChangeType.Insert, buf, ref);
 
         if (dataType === '$schema') {
-          (<Schema>item)._internalSerialize(buf, ref, true);
+          (<Schema>item.value)._internalSerialize(buf, ref, true);
         } else {
           const serializer = registeredSerializers.get(dataType);
-          serializer?.[0](item, buf, ref);
+          serializer?.[0](item.value, buf, ref);
         }
       }
     }

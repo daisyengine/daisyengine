@@ -217,12 +217,12 @@ export class Room {
         arrayOnAddedCallbacks: new Set(),
         arrayOnRemovedCallbacks: new Set(),
         arrayOnItemChangeCallbacks: new Set(),
-        arraySchemaStates: new Map(),
+        arraySchemaStates: [],
       },
 
       [Symbol.iterator]: function* () {
-        for (const [k, v] of state.__daisy.arraySchemaStates) {
-          yield [k, v];
+        for (const v of state.__daisy.arraySchemaStates) {
+          yield v;
         }
       },
     };
@@ -292,7 +292,14 @@ export class Room {
       }
 
       // Trigger ArraySchema callbacks
-      for (const [index, value] of state.__daisy.arraySchemaStates) {
+
+      // loop over arraySchemaStates, using for loop to get index
+      for (
+        let index = 0;
+        index < state.__daisy.arraySchemaStates.length;
+        index++
+      ) {
+        const value = state.__daisy.arraySchemaStates[index];
         //console.log(index, value);
         for (const callback of state.__daisy.arrayOnAddedCallbacks) {
           callback(index, value);
@@ -342,7 +349,7 @@ export class Room {
     }
 
     // Get Map for this ArraySchema
-    const map = <Map<number, any>>state[key].__daisy.arraySchemaStates;
+    const arr = <unknown[]>state[key].__daisy.arraySchemaStates;
 
     // Get number of changes
     const length = deserializeUInt16(buf, ref);
@@ -367,7 +374,7 @@ export class Room {
           );
           //console.log(`Inserted ${index} =`, insertedState);
           // Set map[index] = created state object.
-          map.set(index, insertedState);
+          arr[index] = insertedState;
           // Invoke callbacks here
           for (const callback of state[key].__daisy.arrayOnAddedCallbacks)
             callback(index, insertedState);
@@ -379,7 +386,7 @@ export class Room {
           // Deserialize the value
           const insertedValue = serializer?.[1](buf, ref);
           // Set map[index] = value
-          map.set(index, insertedValue);
+          arr[index] = insertedValue;
           // Invoke callbacks
           for (const callback of state[key].__daisy.arrayOnAddedCallbacks)
             callback(index, insertedValue);
@@ -390,11 +397,11 @@ export class Room {
         // If array type is ArraySchema<T=Schema>
         if (dataType === '$schema') {
           // Get existing state object for this Schema
-          const itemState = map.get(index);
+          const itemState = arr[index];
           if (itemState === undefined) {
             console.error(
               `State was undefined for Schema in ArraySchema during Update operation! Index in array '${index}'. Current map:`,
-              map
+              arr
             );
             throw new Error(
               `State was undefined for Schema in ArraySchema during Update operation!`
@@ -415,15 +422,23 @@ export class Room {
           // Get serializer for this data type
           const serializer = registeredSerializers.get(dataType);
           // Get old value
-          const oldValue = map.get(index);
+          const oldValue = arr[index];
           // Deserialize the value
           const updatedValue = serializer?.[1](buf, ref);
           // Set map[index] = value
-          map.set(index, updatedValue);
+          arr[index] = updatedValue;
           // Invoke callbacks here
           for (const callback of state[key].__daisy.arrayOnItemChangeCallbacks)
             callback(index, oldValue, updatedValue);
         }
+      } else if (changeType === ArrayChangeType.Delete) {
+        // Get old value
+        const oldValue = arr[index];
+        // Delete map[index]
+        arr.splice(index, 1);
+        // Invoke callbacks here
+        for (const callback of state[key].__daisy.arrayOnRemovedCallbacks)
+          callback(index, oldValue);
       }
     }
   }
