@@ -219,6 +219,12 @@ export class Room {
         arrayOnItemChangeCallbacks: new Set(),
         arraySchemaStates: new Map(),
       },
+
+      [Symbol.iterator]: function* () {
+        for (const [k, v] of state.__daisy.arraySchemaStates) {
+          yield [k, v];
+        }
+      },
     };
     // onChange
     state.onChange = (callback: OnChangeCallback) =>
