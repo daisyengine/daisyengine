@@ -1,23 +1,10 @@
-import { ClientProtocol, ServerProtocol } from '@daisy-engine/common';
 import {
-  ArrayChangeType,
-  deserializeString,
-  deserializeUInt16,
-  deserializeUInt32,
-  deserializeUInt8,
+  ClientProtocol,
   NumberRef,
-  registeredSerializers,
-  serializeString,
-  serializeUInt8,
-} from '@daisy-engine/serializer';
+  ServerProtocol,
+} from '@daisy-engine/common';
 import { MessageHandler } from './MessageHandler';
 import { Networking } from './Networking';
-import { OnAddedCallback } from './OnAddedCallback';
-import { OnChangeCallback } from './OnChangeCallback';
-import { OnItemChangeCallback } from './OnItemChangeCallback';
-import { OnRemovedCallback } from './OnRemovedCallback';
-import { SchemaDefinition } from './SchemaDefinition';
-import { SchemaDefinitionJSON } from './SchemaDefinitionJSON';
 
 export class Room {
   private _id!: string;
@@ -57,13 +44,6 @@ export class Room {
   get id(): string {
     return this._id;
   }
-
-  private _state: any;
-  get state(): any {
-    return this._state;
-  }
-
-  private _schemaDefinition: SchemaDefinition | undefined;
 
   private _net: Networking;
   private _connectResultCallback?: (error?: string) => void;
@@ -160,7 +140,9 @@ export class Room {
 
   private _onMessage(buf: Buffer) {
     const ref: NumberRef = { value: 0 };
-    const packetId = <ServerProtocol>deserializeUInt8(buf, ref);
+
+    const packetId = <ServerProtocol>buf[ref.value++];
+
     switch (packetId) {
       case ServerProtocol.Ping:
         // Calculate latency
@@ -177,66 +159,67 @@ export class Room {
       case ServerProtocol.UserPacket:
         this._onUserMessage(buf, ref);
         break;
-      case ServerProtocol.RoomSchemaDefinition:
-        this._schemaDefinition = {
-          ids: new Map(),
-          arraySchemaIds: new Set(),
-          types: new Map(),
-          keys: new Map(),
-          childDefinitions: new Map(),
-        };
-        this._state = this._createEmptyState();
-        this._defineSchema(this.state, this._schemaDefinition, buf, ref);
-        console.log(
-          'Room schema defined by server',
-          JSON.stringify(this._schemaDefinitionToJSON(this._schemaDefinition))
-        );
-
-        break;
       case ServerProtocol.RoomInfo:
-        this._id = deserializeString(buf, ref);
+        // Read room id
+        const idLen = buf.readUInt16LE(ref.value);
+        ref.value += 2;
+        // Read room id, each character is 2 bytes
+        this._id = buf.toString('utf16le', ref.value, ref.value + idLen * 2);
+        ref.value += idLen * 2;
 
+        // Invoke callbacks
         if (this._connectResultCallback) {
           this._connectResultCallback?.call(undefined);
         }
 
         break;
-      case ServerProtocol.RoomState:
-        if (!this._schemaDefinition)
-          throw new Error('RoomState received before SchemaDefinition!');
-
-        this._deserializeSchema(
-          this.state,
-          <SchemaDefinition>this._schemaDefinition,
-          buf,
-          ref
-        );
-
-        break;
       case ServerProtocol.ClientId:
-        this._localClientId = deserializeUInt32(buf, ref);
+        this._localClientId = buf.readUInt32LE(ref.value);
+        ref.value += 4;
         break;
       case ServerProtocol.Error:
-        const error = deserializeString(buf, ref);
+        // Read error message
+        const errorLen = buf.readUInt16LE(ref.value);
+        ref.value += 2;
+        const error = buf.toString(
+          'utf16le',
+          ref.value,
+          ref.value + errorLen * 2
+        );
+        ref.value += errorLen * 2;
+
+        // Log error
         console.error('[SERVER ERROR]', error);
 
+        // Invoke callbacks
         if (this._connectResultCallback) {
           this._connectResultCallback?.call(undefined, error);
         }
-
         for (const callback of this._serverErrorCallbacks) {
           callback.call(undefined, error);
         }
 
         break;
       case ServerProtocol.CloseReason:
-        const reason = deserializeString(buf, ref);
+        // Read close reason
+        const reasonLen = buf.readUInt16LE(ref.value);
+        ref.value += 2;
+        const reason = buf.toString(
+          'utf16le',
+          ref.value,
+          ref.value + reasonLen * 2
+        );
+        ref.value += reasonLen * 2;
+
+        // Log close reason
         console.log('[CLOSE REASON]', reason);
 
+        // Invoke callbacks
         if (this._connectResultCallback) {
           this._connectResultCallback?.call(undefined, reason);
         }
 
+        // Save close reason
         this._closeReason = reason;
 
         break;
@@ -245,335 +228,15 @@ export class Room {
     }
   }
 
-  private _createEmptyState() {
-    const state: any = {
-      __daisy: {
-        onChangeCallbacks: new Set(),
-
-        arrayOnAddedCallbacks: new Set(),
-        arrayOnRemovedCallbacks: new Set(),
-        arrayOnItemChangeCallbacks: new Set(),
-        arraySchemaStates: [],
-      },
-
-      [Symbol.iterator]: function* () {
-        for (const v of state.__daisy.arraySchemaStates) {
-          yield v;
-        }
-      },
-    };
-    // onChange
-    state.onChange = (callback: OnChangeCallback) =>
-      state.__daisy.onChangeCallbacks.add(callback);
-    // listen
-    state.listen = (
-      key: string,
-      callback: (oldValue: any, newValue: any) => void
-    ) => {
-      const fn = (k: string, oldValue: any, newValue: any) => {
-        if (key === k) {
-          callback(oldValue, newValue);
-        }
-      };
-      state.__daisy.onChangeCallbacks.add(fn);
-      return () => state.__daisy.onChangeCallbacks.delete(fn);
-    };
-    // onAdded
-    state.onAdded = (callback: OnAddedCallback) => {
-      state.__daisy.arrayOnAddedCallbacks.add(callback);
-      return () => state.__daisy.arrayOnAddedCallbacks.delete(callback);
-    };
-    // onRemoved
-    state.onRemoved = (callback: OnRemovedCallback) => {
-      state.__daisy.arrayOnRemovedCallbacks.add(callback);
-      return () => state.__daisy.arrayOnRemovedCallbacks.delete(callback);
-    };
-    // onItemChange
-    state.onItemChange = (callback: OnItemChangeCallback) => {
-      state.__daisy.arrayOnItemChangeCallbacks.add(callback);
-      return () => state.__daisy.arrayOnItemChangeCallbacks.delete(callback);
-    };
-
-    // ArraySchema methods
-    state.toArray = () => {
-      return Array.from(state.__daisy.arraySchemaStates.values());
-    };
-    state.get = (i: number) => {
-      return state.__daisy.arraySchemaStates.get(i);
-    };
-    state.triggerCallbacks = () => {
-      // Trigger Schema callbacks
-      const keys = Object.keys(state).filter((item) => {
-        return ![
-          '__daisy',
-          'onChange',
-          'listen',
-          'onAdded',
-          'onRemoved',
-          'onItemChange',
-          'toArray',
-          'get',
-          'triggerCallbacks',
-        ].includes(item);
-      }); // TODO Don't hardcode these
-
-      //console.log(keys);
-      // Trigger Schema callbacks
-      for (const key of keys) {
-        for (const callback of state.__daisy.onChangeCallbacks) {
-          if (typeof state[key] === 'object') continue;
-          //console.log(key);
-          callback(key, undefined, state[key]);
-        }
-      }
-
-      // Trigger ArraySchema callbacks
-
-      // loop over arraySchemaStates, using for loop to get index
-      for (
-        let index = 0;
-        index < state.__daisy.arraySchemaStates.length;
-        index++
-      ) {
-        const value = state.__daisy.arraySchemaStates[index];
-        //console.log(index, value);
-        for (const callback of state.__daisy.arrayOnAddedCallbacks) {
-          callback(index, value);
-        }
-      }
-    };
-
-    return state;
-  }
-
-  private _schemaDefinitionToJSON(
-    definition: SchemaDefinition
-  ): SchemaDefinitionJSON {
-    const o: SchemaDefinitionJSON = {
-      ids: {},
-      keys: {},
-      arraySchemaIds: [],
-      types: {},
-      childDefinitions: {},
-    };
-    for (const [key, id] of definition.ids) {
-      o.ids[key] = id;
-      o.keys[id] = key;
-      if (definition.arraySchemaIds.has(id)) o.arraySchemaIds.push(id);
-      o.types[id] = <string>definition.types.get(id);
-      for (const [_, child] of definition.childDefinitions) {
-        o.childDefinitions[id] = this._schemaDefinitionToJSON(child);
-      }
-    }
-    return o;
-  }
-
-  private _deserializeArraySchema(
-    state: any,
-    definition: SchemaDefinition,
-    buf: Buffer,
-    ref: NumberRef,
-    propId: number
-  ) {
-    const key = <string>definition.keys.get(propId);
-    const dataType = <string>definition.types.get(propId);
-
-    // Create object for ArraySchema if it doesn't exist
-    if (!state[key]) {
-      //console.log(`Create new state for key ${key}`);
-      state[key] = this._createEmptyState();
-    }
-
-    // Get Map for this ArraySchema
-    const arr = <unknown[]>state[key].__daisy.arraySchemaStates;
-
-    // Get number of changes
-    const length = deserializeUInt16(buf, ref);
-
-    // Loop over each change
-    for (let i = 0; i < length; i++) {
-      const index = deserializeUInt16(buf, ref);
-      const changeType = <ArrayChangeType>deserializeUInt8(buf, ref);
-
-      // If change type is Insert
-      if (changeType === ArrayChangeType.Insert) {
-        // If array type is ArraySchema<T=Schema>
-        if (dataType === '$schema') {
-          // Create new state object for this Schema.
-          const insertedState = this._createEmptyState();
-          // Deserialize the schema into created state object
-          this._deserializeSchema(
-            insertedState,
-            <SchemaDefinition>definition.childDefinitions.get(propId),
-            buf,
-            ref
-          );
-          //console.log(`Inserted ${index} =`, insertedState);
-          // Set map[index] = created state object.
-          arr[index] = insertedState;
-          // Invoke callbacks here
-          for (const callback of state[key].__daisy.arrayOnAddedCallbacks)
-            callback(index, insertedState);
-        }
-        // If array type is ArraySchema<T=Primitive or custom type>
-        else {
-          // Get serializer for this data type
-          const serializer = registeredSerializers.get(dataType);
-          // Deserialize the value
-          const insertedValue = serializer?.[1](buf, ref);
-          // Set map[index] = value
-          arr[index] = insertedValue;
-          // Invoke callbacks
-          for (const callback of state[key].__daisy.arrayOnAddedCallbacks)
-            callback(index, insertedValue);
-        }
-      }
-      // If change type is Update
-      else if (changeType === ArrayChangeType.Update) {
-        // If array type is ArraySchema<T=Schema>
-        if (dataType === '$schema') {
-          // Get existing state object for this Schema
-          const itemState = arr[index];
-          if (itemState === undefined) {
-            console.error(
-              `State was undefined for Schema in ArraySchema during Update operation! Index in array '${index}'. Current map:`,
-              arr
-            );
-            throw new Error(
-              `State was undefined for Schema in ArraySchema during Update operation!`
-            );
-          }
-
-          // Deserialize the schema into existing state object
-          this._deserializeSchema(
-            itemState,
-            <SchemaDefinition>definition.childDefinitions.get(propId),
-            buf,
-            ref
-          );
-          // Set map[index] = existing state object.
-          // map.set(index, itemState); <- Not necessary!
-          // ! We don't invoke callbacks for schema changes here.
-        } else {
-          // Get serializer for this data type
-          const serializer = registeredSerializers.get(dataType);
-          // Get old value
-          const oldValue = arr[index];
-          // Deserialize the value
-          const updatedValue = serializer?.[1](buf, ref);
-          // Set map[index] = value
-          arr[index] = updatedValue;
-          // Invoke callbacks here
-          for (const callback of state[key].__daisy.arrayOnItemChangeCallbacks)
-            callback(index, oldValue, updatedValue);
-        }
-      } else if (changeType === ArrayChangeType.Delete) {
-        // Get old value
-        const oldValue = arr[index];
-        // Delete map[index]
-        arr.splice(index, 1);
-        // Invoke callbacks here
-        for (const callback of state[key].__daisy.arrayOnRemovedCallbacks)
-          callback(index, oldValue);
-      }
-    }
-  }
-
-  private _deserializeSchema(
-    state: any,
-    definition: SchemaDefinition,
-    buf: Buffer,
-    ref: NumberRef
-  ) {
-    const length = deserializeUInt8(buf, ref);
-
-    for (let i = 0; i < length; i++) {
-      const propId = deserializeUInt8(buf, ref);
-
-      // If property is ArraySchema
-      if (definition.arraySchemaIds.has(propId)) {
-        this._deserializeArraySchema(state, definition, buf, ref, propId);
-      }
-      // If property is not ArraySchema
-      else {
-        const key = <string>definition.keys.get(propId);
-        const dataType = <string>definition.types.get(propId);
-
-        // If value is Schema
-        if (dataType === '$schema') {
-          // Make sure state[key] exists. This allows Schema inside ArraySchema
-          // to have child Schema. Too much nesting, need to improve readability
-          // because even I don't know why some things work the way they do.
-          state[key] = state[key] || this._createEmptyState();
-
-          // Deserialize schema value into state[key]
-          this._deserializeSchema(
-            state[key],
-            <SchemaDefinition>definition.childDefinitions.get(propId),
-            buf,
-            ref
-          );
-        }
-        // If value is primitive/custom
-        else {
-          const serializer = registeredSerializers.get(dataType);
-          const oldValue = state[key];
-          const newValue = serializer?.[1](buf, ref);
-          state[key] = newValue;
-          // Invoke callbacks here
-          for (const callback of state.__daisy.onChangeCallbacks)
-            callback(key, oldValue, newValue);
-        }
-      }
-    }
-  }
-
-  private _defineSchema(
-    state: any,
-    data: SchemaDefinition,
-    buf: Buffer,
-    ref: NumberRef
-  ) {
-    const length = deserializeUInt8(buf, ref);
-
-    for (let i = 0; i < length; i++) {
-      const key = deserializeString(buf, ref);
-      const id = deserializeUInt8(buf, ref);
-      const type = deserializeString(buf, ref);
-      const isArraySchema = deserializeUInt8(buf, ref) === 1;
-      if (isArraySchema) data.arraySchemaIds.add(id);
-      data.ids.set(key, id);
-      data.keys.set(id, key);
-      data.types.set(id, type);
-
-      if (type === '$schema') {
-        state[key] = this._createEmptyState();
-        data.childDefinitions.set(id, {
-          ids: new Map(),
-          types: new Map(),
-          arraySchemaIds: new Set(),
-          keys: new Map(),
-          childDefinitions: new Map(),
-        });
-
-        this._defineSchema(
-          state[key],
-          <SchemaDefinition>data.childDefinitions.get(id),
-          buf,
-          ref
-        );
-      }
-    }
-  }
-
   private _onUserMessage(buf: Buffer, ref: NumberRef) {
-    const eventType = deserializeUInt8(buf, ref);
+    const eventType = buf[ref.value++];
 
     switch (eventType) {
       case 0: {
         // Number event
-        const event = deserializeUInt8(buf, ref);
+        const event = buf.readUInt8(ref.value++);
 
+        // Invoke handler
         this._messageHandlers
           .get(event)
           ?.call(this, this._getUserMessageContent(buf, ref));
@@ -581,8 +244,16 @@ export class Room {
       }
       case 1: {
         // String event
-        const event = deserializeString(buf, ref);
+        const eventLen = buf.readUInt16LE(ref.value);
+        ref.value += 2;
+        const event = buf.toString(
+          'utf16le',
+          ref.value,
+          ref.value + eventLen * 2
+        );
+        ref.value += eventLen * 2;
 
+        // Invoke handler
         this._messageHandlers
           .get(event)
           ?.call(this, this._getUserMessageContent(buf, ref));
@@ -597,7 +268,7 @@ export class Room {
    * @internal
    */
   private _getUserMessageContent(buf: Buffer, ref: NumberRef) {
-    const dataType = deserializeUInt8(buf, ref);
+    const dataType = buf[ref.value++];
 
     switch (dataType) {
       case 0:
@@ -605,7 +276,16 @@ export class Room {
         return buf.subarray(ref.value);
       case 1:
         // String data
-        return deserializeString(buf, ref);
+        const dataLen = buf.readUInt16LE(ref.value);
+        ref.value += 2;
+        const data = buf.toString(
+          'utf16le',
+          ref.value,
+          ref.value + dataLen * 2
+        );
+        ref.value += dataLen * 2;
+
+        return data;
       default:
         throw new Error(`Invalid dataType for message: ${dataType}`);
     }
@@ -621,25 +301,30 @@ export class Room {
     data: T2
   ) {
     let ref: NumberRef = { value: 0 };
-    serializeUInt8(ClientProtocol.UserPacket, this._sendBuffer, ref);
+    this._sendBuffer.writeUInt8(ClientProtocol.UserPacket, ref.value++);
+
     if (typeof event === 'number') {
       // Event is uint8
-      serializeUInt8(0, this._sendBuffer, ref);
-      serializeUInt8(event, this._sendBuffer, ref);
+      this._sendBuffer.writeUInt8(0, ref.value++);
+      this._sendBuffer.writeUInt8(event, ref.value++);
     } else if (typeof event === 'string') {
       // Event is string
-      serializeUInt8(1, this._sendBuffer, ref);
-      serializeString(event, this._sendBuffer, ref);
+      this._sendBuffer.writeUInt8(1, ref.value++);
+      this._sendBuffer.writeUInt16LE(event.length, ref.value);
+      ref.value += 2;
+      ref.value += this._sendBuffer.write(event, ref.value, 'utf16le');
     }
 
     if (data instanceof Buffer) {
       // Data is buffer
-      serializeUInt8(0, this._sendBuffer, ref);
+      this._sendBuffer.writeUInt8(0, ref.value++);
       ref.value += data.copy(this._sendBuffer, ref.value, 0);
     } else if (typeof data == 'string') {
       // Data is string
-      serializeUInt8(1, this._sendBuffer, ref);
-      serializeString(data, this._sendBuffer, ref);
+      this._sendBuffer.writeUInt8(1, ref.value++);
+      this._sendBuffer.writeUInt16LE(data.length, ref.value);
+      ref.value += 2;
+      ref.value += this._sendBuffer.write(data, ref.value, 'utf16le');
     }
 
     return this._sendBuffer.subarray(0, ref.value);

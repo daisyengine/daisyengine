@@ -18,7 +18,6 @@
     "paths": {
       "@daisy-engine/client": ["packages/client/src/index.ts"],
       "@daisy-engine/common": ["packages/common/src/index.ts"],
-      "@daisy-engine/serializer": ["packages/serializer/src/index.ts"],
       "@daisy-engine/server": ["packages/server/src/index.ts"]
     }
   },

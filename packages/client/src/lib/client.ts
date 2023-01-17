@@ -1,31 +1,37 @@
 import { ClientProtocol } from '@daisy-engine/common';
-import {
-  NumberRef,
-  serializeUInt8,
-  serializeString,
-} from '@daisy-engine/serializer';
 import { Room } from './Room';
 
-export class Client {
-  private _addr: string;
-  private _auth: string;
-  constructor(serverAddr: string, authString: string = '') {
-    this._addr = serverAddr;
-    this._auth = authString;
-  }
+export const joinDaisyRoom = async (
+  addr: string,
+  id: string,
+  authString = ''
+): Promise<Room> => {
+  // Create room instance
+  var room = new Room();
+  // Allocate buffer
+  const buf = Buffer.alloc(
+    1 + (2 + authString.length * 2) + (2 + id.length * 2)
+  );
 
-  async joinRoom(id: string): Promise<Room> {
-    var room = new Room();
-    const buf = Buffer.alloc(
-      1 + (2 + this._auth.length * 2) + (2 + id.length * 2)
-    );
-    const ref: NumberRef = { value: 0 };
-    serializeUInt8(ClientProtocol.JoinRoom, buf, ref);
-    serializeString(this._auth, buf, ref);
-    serializeString(id, buf, ref);
+  let offset = 0;
+  // Write packet id
+  buf.writeUInt8(ClientProtocol.JoinRoom, offset);
+  offset += 1;
+  // Write auth string
+  buf.writeUInt16LE(authString.length, offset);
+  offset += 2;
+  buf.write(authString, offset, authString.length * 2, 'utf16le');
+  offset += authString.length * 2;
 
-    await room._internalConnect(this._addr, buf);
+  // Write room id
+  buf.writeUInt16LE(id.length, offset);
+  offset += 2;
+  buf.write(id, offset, id.length * 2, 'utf16le');
+  offset += id.length * 2;
 
-    return room;
-  }
-}
+  // Wait for connection before returning room
+  await room._internalConnect(addr, buf);
+
+  // Return room
+  return room;
+};

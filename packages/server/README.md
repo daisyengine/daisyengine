@@ -1,6 +1,11 @@
-# Daisy Engine: Server
+# server
 
-## ⚠️ WORK IN PROGRESS
+This library was generated with [Nx](https://nx.dev).
 
-This project is **_NOT_** yet finished.
-It is mostly undocumented and untested, many features are not yet implemented, some features are probably implemented wrong and it is likely that **breaking changes will be made** before it is released.
+## Running unit tests
+
+Run `nx test server` to execute the unit tests via [Jest](https://jestjs.io).
+
+## Running lint
+
+Run `nx lint server` to execute the lint via [ESLint](https://eslint.org/).

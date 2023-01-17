@@ -1,17 +1,15 @@
-import { ClientProtocol, ServerProtocol } from '@daisy-engine/common';
 import {
-  deserializeString,
-  deserializeUInt8,
+  ClientProtocol,
   NumberRef,
-  Schema,
-} from '@daisy-engine/serializer';
-import { NetworkClient } from './network-client';
+  ServerProtocol,
+} from '@daisy-engine/common';
+import { NetworkClient } from './NetworkClient';
 import { ClientStatus } from './ClientStatus';
-import { Room } from './room';
-import { WebSocketServer } from './websocket-server';
+import { Room } from './Room';
+import { WebSocketServer } from './WebsocketServer';
 
 interface RoomDefinition {
-  template: typeof Room<Schema>;
+  template: typeof Room;
   opts?: any;
 }
 
@@ -20,7 +18,7 @@ const PACKET_PING = Buffer.from([ServerProtocol.Ping]);
 export class Server {
   wsServer: WebSocketServer;
   clients: Map<number, NetworkClient> = new Map();
-  rooms: Map<string, Room<Schema>> = new Map();
+  rooms: Map<string, Room> = new Map();
 
   private _roomTemplates: Map<string, RoomDefinition> = new Map();
 
@@ -36,7 +34,7 @@ export class Server {
     this.wsServer.start();
   }
 
-  define(name: string, template: typeof Room<Schema>, opts?: any) {
+  define(name: string, template: typeof Room, opts?: any) {
     console.log(
       '[Server]',
       `defining room template ${name} with type ${template.name} and options`,
@@ -53,7 +51,7 @@ export class Server {
     return room;
   }
 
-  destroyRoom(room: Room<Schema>) {
+  destroyRoom(room: Room) {
     this.rooms.delete(room.id);
     room._internalCleanup();
   }
@@ -72,11 +70,7 @@ export class Server {
     this.clients.delete(client.id);
   }
 
-  private _joinOrClose(
-    client: NetworkClient,
-    authString: string,
-    room: Room<any>
-  ) {
+  private _joinOrClose(client: NetworkClient, room: Room) {
     if (!client.canJoinFullRooms && room.isFull()) {
       client.close(0, 'room is full');
       return;
@@ -90,11 +84,12 @@ export class Server {
   private _onMessage(client: NetworkClient, buf: Buffer) {
     const ref: NumberRef = { value: 0 };
 
-    const packetId = <ClientProtocol>deserializeUInt8(buf, ref);
+    const packetId = <ClientProtocol>buf.readUInt8(ref.value++);
 
     switch (packetId) {
       case ClientProtocol.JoinRoom: {
-        if (client.status !== ClientStatus.CONNECTED) {
+        // Check if client is already connected
+        if (client.status > ClientStatus.CONNECTED) {
           client.close(0, 'bad request');
           break;
         }
@@ -102,14 +97,32 @@ export class Server {
         // Join existing room
         client.status = ClientStatus.JOINING;
 
-        const authString = deserializeString(buf, ref);
-        const roomId = deserializeString(buf, ref);
+        // Deserialize auth string
+        const authStringLen = buf.readUInt16LE(ref.value);
+        ref.value += 2;
+        const authString = buf.toString(
+          'utf16le',
+          ref.value,
+          ref.value + authStringLen * 2
+        );
+        ref.value += authStringLen * 2;
 
+        // Deserialize room id
+        const roomIdLen = buf.readUInt16LE(ref.value);
+        ref.value += 2;
+        const roomId = buf.toString(
+          'utf16le',
+          ref.value,
+          ref.value + roomIdLen * 2
+        );
+        ref.value += roomIdLen * 2;
+
+        // Join room if it exists
         if (this.rooms.has(roomId)) {
-          const room = this.rooms.get(roomId) as Room<Schema>;
+          const room = this.rooms.get(roomId);
           try {
             room.onClientAuth(client, authString);
-            this._joinOrClose(client, authString, room);
+            this._joinOrClose(client, room);
           } catch (e) {
             client.close(0, e.message);
             throw e;
@@ -126,6 +139,7 @@ export class Server {
           client.close(0, 'bad request');
           break;
         }
+        // Pass message to room
         client.room._internalOnUserMessage(client, buf, ref);
         break;
 
@@ -135,6 +149,7 @@ export class Server {
           break;
         }
 
+        // Send pong
         client._internalSend(PACKET_PING);
         break;
 

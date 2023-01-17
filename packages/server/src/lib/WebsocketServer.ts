@@ -1,6 +1,6 @@
 import * as uWS from 'uWebSockets.js';
 import { EventEmitter } from 'eventemitter3';
-import { NetworkClient } from './network-client';
+import { NetworkClient } from './NetworkClient';
 
 export class WebSocketServer {
   readonly port: number;

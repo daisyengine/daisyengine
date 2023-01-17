@@ -1,30 +1,15 @@
-import { NetworkClient } from './network-client';
+import { NetworkClient } from './NetworkClient';
 import { ClientStatus } from './ClientStatus';
-import {
-  deserializeString,
-  deserializeUInt8,
-  NumberRef,
-  Schema,
-  SchemaData,
-  serializeString,
-  serializeUInt32,
-  serializeUInt8,
-} from '@daisy-engine/serializer';
-import { ServerProtocol } from '@daisy-engine/common';
+import { NumberRef, ServerProtocol } from '@daisy-engine/common';
 
 // Pre-allocate 16MB buffer for sending data
 const BUFFER_SIZE = 16 * 1024 * 1024;
 const BUFFER = Buffer.alloc(BUFFER_SIZE);
-// ^ TODO Let user configure this
-
 type MessageHandler = (client: NetworkClient, message: Buffer | string) => void;
 
-export class Room<T extends Schema> {
+export class Room {
   /** Unique ID of this room */
   readonly id: string;
-
-  /** State of this room */
-  state: T;
 
   /**
    * Number of clients that may connect to this room.
@@ -46,7 +31,6 @@ export class Room<T extends Schema> {
   private _deltaTimeMs: number;
   private _maxAccumulation: number = 25;
   private _stopTicking: boolean;
-  private _lastStateChange: number = -1;
   private _disableBuiltinTicker: boolean;
 
   /**
@@ -213,12 +197,10 @@ export class Room<T extends Schema> {
    */
   _internalOnOpen(client: NetworkClient) {
     this._sendClientId(client);
-    this._sendSchemaDefinition(client);
-    this._sendFullState(client);
     this._sendRoomInfo(client);
     this.clients.set(client.id, client);
 
-    console.log(`Client ${client.id} connected`);
+    //console.log(`Client ${client.id} connected`);
 
     this.onClientJoined(client);
   }
@@ -230,7 +212,7 @@ export class Room<T extends Schema> {
   _internalOnClose(client: NetworkClient, code: number, reason: Buffer) {
     this.clients.delete(client.id);
 
-    console.log(`Client ${client.id} disconnected (Code ${code})`);
+    //console.log(`Client ${client.id} disconnected (Code ${code})`);
 
     this.onClientLeft(client);
   }
@@ -240,12 +222,12 @@ export class Room<T extends Schema> {
    * @internal
    */
   _internalOnUserMessage(client: NetworkClient, buf: Buffer, ref: NumberRef) {
-    const eventType = deserializeUInt8(buf, ref);
+    const eventType = buf.readUInt8(ref.value++);
 
     switch (eventType) {
       case 0: {
         // Number event
-        const event = deserializeUInt8(buf, ref);
+        const event = buf.readUInt8(ref.value++);
 
         this._messageHandlers[event]?.call(
           this,
@@ -256,7 +238,15 @@ export class Room<T extends Schema> {
       }
       case 1: {
         // String event
-        const event = deserializeString(buf, ref);
+        const eventLength = buf.readUInt16LE(ref.value);
+        ref.value += 2;
+        const event = buf.toString(
+          'utf16le',
+          ref.value,
+          ref.value + eventLength * 2
+        );
+        ref.value += eventLength * 2;
+
         this._messageHandlers[event]?.call(
           this,
           client,
@@ -272,10 +262,6 @@ export class Room<T extends Schema> {
    * Runs after {@link init}
    */
   private _postInit() {
-    this.state._internalOnDirty = () => {
-      this._lastStateChange = this.tickNumber;
-    };
-
     if (!this._disableBuiltinTicker) {
       this._lastTime = this._now();
       this._accumulator = 0;
@@ -318,7 +304,6 @@ export class Room<T extends Schema> {
       if (this._stopTicking || this._disableBuiltinTicker) return;
 
       this.tick();
-      this.sendStateUpdates();
 
       this._accumulator -= this._deltaTimeMs;
       this._tickNumber++;
@@ -332,7 +317,7 @@ export class Room<T extends Schema> {
    * @internal
    */
   private _getUserMessageContent(buf: Buffer, ref: NumberRef) {
-    const dataType = deserializeUInt8(buf, ref);
+    const dataType = buf.readUInt8(ref.value++);
 
     switch (dataType) {
       case 0:
@@ -340,7 +325,15 @@ export class Room<T extends Schema> {
         return buf.subarray(ref.value);
       case 1:
         // String data
-        return deserializeString(buf, ref);
+        const dataLength = buf.readUInt16LE(ref.value);
+        ref.value += 2;
+        const data = buf.toString(
+          'utf16le',
+          ref.value,
+          ref.value + dataLength * 2
+        );
+        ref.value += dataLength * 2;
+        return data;
       default:
         throw new Error(`Invalid dataType for message: ${dataType}`);
     }
@@ -356,56 +349,33 @@ export class Room<T extends Schema> {
     data: T2
   ) {
     let ref: NumberRef = { value: 0 };
-    serializeUInt8(ServerProtocol.UserPacket, BUFFER, ref);
+    //serializeUInt8(ServerProtocol.UserPacket, BUFFER, ref);
+    BUFFER.writeUInt8(ServerProtocol.UserPacket, ref.value++);
     if (typeof event === 'number') {
       // Event is uint8
-      serializeUInt8(0, BUFFER, ref);
-      serializeUInt8(event, BUFFER, ref);
+      BUFFER.writeUInt8(0, ref.value++);
+      BUFFER.writeUInt8(event, ref.value++);
     } else if (typeof event === 'string') {
       // Event is string
-      serializeUInt8(1, BUFFER, ref);
-      serializeString(event, BUFFER, ref);
+      BUFFER.writeUInt8(1, ref.value++);
+      BUFFER.writeUInt16LE(event.length, ref.value);
+      ref.value += 2;
+      ref.value += BUFFER.write(event, ref.value, 'utf16le');
     }
 
     if (data instanceof Buffer) {
       // Data is buffer
-      serializeUInt8(0, BUFFER, ref);
+      BUFFER.writeUInt8(0, ref.value++);
       ref.value += data.copy(BUFFER, ref.value, 0);
     } else if (typeof data == 'string') {
       // Data is string
-      serializeUInt8(1, BUFFER, ref);
-      serializeString(data, BUFFER, ref);
+      BUFFER.writeUInt8(1, ref.value++);
+      BUFFER.writeUInt16LE(data.length, ref.value);
+      ref.value += 2;
+      ref.value += BUFFER.write(data, ref.value, 'utf16le');
     }
 
     return BUFFER.subarray(0, ref.value);
-  }
-
-  /**
-   * Calling this method will broadcast the latest state patch to everyone.
-   * If nothing has changed since the last call to this method, it will not do
-   * anything.
-   *
-   * You should probably call this in your application's update loop ***if***
-   * you are not using the built-in ticker.
-   */
-  protected sendStateUpdates() {
-    if (this.state._internalChangeTree.size() === 0) return;
-
-    const ref: NumberRef = { value: 0 };
-    serializeUInt8(ServerProtocol.RoomState, BUFFER, ref);
-    this.state._internalSerialize(BUFFER, ref);
-
-    const byteArray = BUFFER.subarray(0, ref.value);
-
-    for (const [_, client] of this.clients) {
-      if (
-        client.status !== ClientStatus.JOINED ||
-        client.lastSentStateUpdateTick >= this._lastStateChange
-      )
-        continue;
-      client.lastSentStateUpdateTick = this._lastStateChange;
-      client._internalSend(byteArray);
-    }
   }
 
   /**
@@ -413,61 +383,13 @@ export class Room<T extends Schema> {
    * @param client
    */
   private _sendClientId(client: NetworkClient) {
-    const ref: NumberRef = { value: 0 };
+    let offset = 0;
 
-    serializeUInt8(ServerProtocol.ClientId, BUFFER, ref);
-    serializeUInt32(client.id, BUFFER, ref);
+    BUFFER.writeUInt8(ServerProtocol.ClientId, offset++);
+    BUFFER.writeUInt32LE(client.id, offset);
+    offset += 4;
 
-    client._internalSend(BUFFER.subarray(0, ref.value));
-  }
-
-  /**
-   * Sends the schema definition to a client.
-   * @param client
-   */
-  private _sendSchemaDefinition(client: NetworkClient) {
-    const ref: NumberRef = { value: 0 };
-
-    serializeUInt8(ServerProtocol.RoomSchemaDefinition, BUFFER, ref);
-
-    this._serializeSchemaDefinition(
-      this.state.constructor as typeof Schema,
-      BUFFER,
-      ref
-    );
-
-    client._internalSend(BUFFER.subarray(0, ref.value));
-  }
-
-  /**
-   * Creates a Schema definition.
-   */
-  private _serializeSchemaDefinition(
-    schema: typeof Schema,
-    buf: Buffer,
-    ref: NumberRef
-  ) {
-    const data = <SchemaData>(schema as any).__data;
-    serializeUInt8(data.ids.size, buf, ref);
-    //console.log(schema);
-    for (const [k, id] of data.ids) {
-      const type = data.types.get(id);
-      const isArraySchema = data.arraySchemaIds.has(id);
-      serializeString(k, buf, ref);
-      serializeUInt8(id, buf, ref);
-      serializeString(type, buf, ref);
-      serializeUInt8(isArraySchema ? 1 : 0, buf, ref);
-
-      if (type === '$schema') {
-        // We need the type of `schema[k]`. We could use schema[k].constructor
-        // and cast it to 'typeof Schema' but then we'd need to check for
-        // ArraySchema<T> and get type from __schemaTypes here anyway, so let's
-        // just use __schemaTypes for all types that has a Schema in them.
-        // Schema, [Schema], Map<K|V=Schema>?
-        const value = data.schemaTypes.get(id);
-        this._serializeSchemaDefinition(value, buf, ref);
-      }
-    }
+    client._internalSend(BUFFER.subarray(0, offset));
   }
 
   /**
@@ -476,27 +398,15 @@ export class Room<T extends Schema> {
    * @internal
    */
   private _sendRoomInfo(client: NetworkClient) {
-    const ref: NumberRef = { value: 0 };
-    serializeUInt8(ServerProtocol.RoomInfo, BUFFER, ref);
-    serializeString(this.id, BUFFER, ref);
+    let offset = 0;
 
-    client._internalSend(BUFFER.subarray(0, ref.value));
-  }
+    BUFFER.writeUInt8(ServerProtocol.RoomInfo, offset++);
+    // Write room id string
+    BUFFER.writeUInt16LE(this.id.length, offset);
+    offset += 2;
+    offset += BUFFER.write(this.id, offset, 'utf16le');
 
-  /**
-   * Sends full room state to specified `client`
-   *
-   * Used to sync room state on join
-   * @param client
-   * @internal
-   */
-  private _sendFullState(client: NetworkClient) {
-    const ref: NumberRef = { value: 0 };
-    serializeUInt8(ServerProtocol.RoomState, BUFFER, ref);
-    this.state._internalSerialize(BUFFER, ref, true);
-
-    client.lastSentStateUpdateTick = this._lastStateChange;
-    client._internalSend(BUFFER.subarray(0, ref.value));
+    client._internalSend(BUFFER.subarray(0, offset));
   }
 
   private _broadcast(msg: Buffer) {

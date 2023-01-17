@@ -1,7 +1,5 @@
 export enum ServerProtocol {
   UserPacket = 0,
-  RoomSchemaDefinition = 1,
-  RoomState = 2,
   RoomInfo = 3,
   ClientId = 4,
 
@@ -16,3 +14,6 @@ export enum ClientProtocol {
 
   Ping = 255,
 }
+export type NumberRef = {
+  value: number;
+};

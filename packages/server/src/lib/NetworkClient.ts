@@ -1,12 +1,7 @@
-import { ServerProtocol } from '@daisy-engine/common';
-import {
-  NumberRef,
-  serializeString,
-  serializeUInt8,
-} from '@daisy-engine/serializer';
+import { NumberRef, ServerProtocol } from '@daisy-engine/common';
 import * as uWS from 'uWebSockets.js';
 import { ClientStatus } from './ClientStatus';
-import { Room } from './room';
+import { Room } from './Room';
 
 /**
  * Number of milliseconds to wait before connecting a connection.
@@ -22,7 +17,7 @@ export class NetworkClient {
   /**
    * The room this client is in
    */
-  room?: Room<any> = null;
+  room?: Room;
 
   /**
    * Whether or not this client should bypass the client count check.
@@ -70,9 +65,14 @@ export class NetworkClient {
 
     if (reason !== null) {
       const buf = Buffer.alloc(1 + 2 + reason.length * 2);
-      const ref: NumberRef = { value: 0 };
-      serializeUInt8(ServerProtocol.CloseReason, buf, ref);
-      serializeString(reason, buf, ref);
+      let offset = 0;
+      buf.writeUInt8(ServerProtocol.CloseReason, offset++);
+
+      // Write reason
+      buf.writeUInt16LE(reason.length, offset);
+      offset += 2;
+      offset += buf.write(reason, offset, reason.length * 2, 'utf16le');
+
       this._internalSend(buf);
       setTimeout(() => {
         if (this.status !== ClientStatus.CLOSED) this._ws.end(code, reason);
