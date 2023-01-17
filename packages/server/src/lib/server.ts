@@ -1,11 +1,12 @@
-import { ClientProtocol } from '@daisy-engine/common';
+import { ClientProtocol, ServerProtocol } from '@daisy-engine/common';
 import {
   deserializeString,
   deserializeUInt8,
   NumberRef,
   Schema,
 } from '@daisy-engine/serializer';
-import { ClientStatus, NetworkClient } from './network-client';
+import { NetworkClient } from './network-client';
+import { ClientStatus } from './ClientStatus';
 import { Room } from './room';
 import { WebSocketServer } from './websocket-server';
 
@@ -13,6 +14,8 @@ interface RoomDefinition {
   template: typeof Room<Schema>;
   opts?: any;
 }
+
+const PACKET_PING = Buffer.from([ServerProtocol.Ping]);
 
 export class Server {
   wsServer: WebSocketServer;
@@ -124,6 +127,15 @@ export class Server {
           break;
         }
         client.room._internalOnUserMessage(client, buf, ref);
+        break;
+
+      case ClientProtocol.Ping:
+        // Ignore ping if the client is closing
+        if (client.status >= ClientStatus.CLOSING) {
+          break;
+        }
+
+        client._internalSend(PACKET_PING);
         break;
 
       default:

@@ -1,4 +1,5 @@
-import { ClientStatus, NetworkClient } from './network-client';
+import { NetworkClient } from './network-client';
+import { ClientStatus } from './ClientStatus';
 import {
   deserializeString,
   deserializeUInt8,
@@ -11,7 +12,9 @@ import {
 } from '@daisy-engine/serializer';
 import { ServerProtocol } from '@daisy-engine/common';
 
-const buf = Buffer.alloc(1024000); // Packet size can NOT exceed 1mb.
+// Pre-allocate 16MB buffer for sending data
+const BUFFER_SIZE = 16 * 1024 * 1024;
+const BUFFER = Buffer.alloc(BUFFER_SIZE);
 // ^ TODO Let user configure this
 
 type MessageHandler = (client: NetworkClient, message: Buffer | string) => void;
@@ -23,7 +26,10 @@ export class Room<T extends Schema> {
   /** State of this room */
   state: T;
 
-  /** Number of clients that may connect to this room */
+  /**
+   * Number of clients that may connect to this room.
+   * @default Infinity
+   */
   maxClients: number = Infinity;
 
   /**
@@ -350,28 +356,28 @@ export class Room<T extends Schema> {
     data: T2
   ) {
     let ref: NumberRef = { value: 0 };
-    serializeUInt8(ServerProtocol.UserPacket, buf, ref);
+    serializeUInt8(ServerProtocol.UserPacket, BUFFER, ref);
     if (typeof event === 'number') {
       // Event is uint8
-      serializeUInt8(0, buf, ref);
-      serializeUInt8(event, buf, ref);
+      serializeUInt8(0, BUFFER, ref);
+      serializeUInt8(event, BUFFER, ref);
     } else if (typeof event === 'string') {
       // Event is string
-      serializeUInt8(1, buf, ref);
-      serializeString(event, buf, ref);
+      serializeUInt8(1, BUFFER, ref);
+      serializeString(event, BUFFER, ref);
     }
 
     if (data instanceof Buffer) {
       // Data is buffer
-      serializeUInt8(0, buf, ref);
-      ref.value += data.copy(buf, ref.value, 0);
+      serializeUInt8(0, BUFFER, ref);
+      ref.value += data.copy(BUFFER, ref.value, 0);
     } else if (typeof data == 'string') {
       // Data is string
-      serializeUInt8(1, buf, ref);
-      serializeString(data, buf, ref);
+      serializeUInt8(1, BUFFER, ref);
+      serializeString(data, BUFFER, ref);
     }
 
-    return buf.subarray(0, ref.value);
+    return BUFFER.subarray(0, ref.value);
   }
 
   /**
@@ -386,10 +392,10 @@ export class Room<T extends Schema> {
     if (this.state._internalChangeTree.size() === 0) return;
 
     const ref: NumberRef = { value: 0 };
-    serializeUInt8(ServerProtocol.RoomState, buf, ref);
-    this.state._internalSerialize(buf, ref);
+    serializeUInt8(ServerProtocol.RoomState, BUFFER, ref);
+    this.state._internalSerialize(BUFFER, ref);
 
-    const byteArray = buf.subarray(0, ref.value);
+    const byteArray = BUFFER.subarray(0, ref.value);
 
     for (const [_, client] of this.clients) {
       if (
@@ -409,10 +415,10 @@ export class Room<T extends Schema> {
   private _sendClientId(client: NetworkClient) {
     const ref: NumberRef = { value: 0 };
 
-    serializeUInt8(ServerProtocol.ClientId, buf, ref);
-    serializeUInt32(client.id, buf, ref);
+    serializeUInt8(ServerProtocol.ClientId, BUFFER, ref);
+    serializeUInt32(client.id, BUFFER, ref);
 
-    client._internalSend(buf.subarray(0, ref.value));
+    client._internalSend(BUFFER.subarray(0, ref.value));
   }
 
   /**
@@ -422,15 +428,15 @@ export class Room<T extends Schema> {
   private _sendSchemaDefinition(client: NetworkClient) {
     const ref: NumberRef = { value: 0 };
 
-    serializeUInt8(ServerProtocol.RoomSchemaDefinition, buf, ref);
+    serializeUInt8(ServerProtocol.RoomSchemaDefinition, BUFFER, ref);
 
     this._serializeSchemaDefinition(
       this.state.constructor as typeof Schema,
-      buf,
+      BUFFER,
       ref
     );
 
-    client._internalSend(buf.subarray(0, ref.value));
+    client._internalSend(BUFFER.subarray(0, ref.value));
   }
 
   /**
@@ -471,10 +477,10 @@ export class Room<T extends Schema> {
    */
   private _sendRoomInfo(client: NetworkClient) {
     const ref: NumberRef = { value: 0 };
-    serializeUInt8(ServerProtocol.RoomInfo, buf, ref);
-    serializeString(this.id, buf, ref);
+    serializeUInt8(ServerProtocol.RoomInfo, BUFFER, ref);
+    serializeString(this.id, BUFFER, ref);
 
-    client._internalSend(buf.subarray(0, ref.value));
+    client._internalSend(BUFFER.subarray(0, ref.value));
   }
 
   /**
@@ -486,11 +492,11 @@ export class Room<T extends Schema> {
    */
   private _sendFullState(client: NetworkClient) {
     const ref: NumberRef = { value: 0 };
-    serializeUInt8(ServerProtocol.RoomState, buf, ref);
-    this.state._internalSerialize(buf, ref, true);
+    serializeUInt8(ServerProtocol.RoomState, BUFFER, ref);
+    this.state._internalSerialize(BUFFER, ref, true);
 
     client.lastSentStateUpdateTick = this._lastStateChange;
-    client._internalSend(buf.subarray(0, ref.value));
+    client._internalSend(BUFFER.subarray(0, ref.value));
   }
 
   private _broadcast(msg: Buffer) {

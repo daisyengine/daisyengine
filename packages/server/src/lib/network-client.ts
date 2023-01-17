@@ -5,18 +5,8 @@ import {
   serializeUInt8,
 } from '@daisy-engine/serializer';
 import * as uWS from 'uWebSockets.js';
+import { ClientStatus } from './ClientStatus';
 import { Room } from './room';
-
-/**
- * Connection status of a NetworkClient
- */
-export enum ClientStatus {
-  CONNECTED,
-  JOINING,
-  JOINED,
-  CLOSING,
-  CLOSED,
-}
 
 /**
  * Number of milliseconds to wait before connecting a connection.

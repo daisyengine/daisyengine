@@ -10,41 +10,43 @@ import {
   serializeString,
   serializeUInt8,
 } from '@daisy-engine/serializer';
-import { Networking } from './networking';
-
-type MessageHandler = (message: Buffer | string) => void;
-
-interface SchemaDefinition {
-  ids: Map<string, number>;
-  types: Map<number, string>;
-  arraySchemaIds: Set<number>;
-  keys: Map<number, string>;
-  childDefinitions: Map<number, SchemaDefinition>;
-}
-
-interface SchemaDefinitionJSON {
-  ids: { [key: string]: number };
-  keys: { [key: number]: string };
-  arraySchemaIds: number[];
-  types: { [key: number]: string };
-  childDefinitions: { [key: number]: SchemaDefinitionJSON };
-}
-
-type OnChangeCallback = (key: string, oldValue: any, newValue: any) => void;
-type OnAddedCallback = (index: number, value: any) => void;
-type OnRemovedCallback = (index: number, value: any) => void;
-type OnItemChangeCallback = (
-  index: number,
-  oldValue: any,
-  newValue: any
-) => void;
+import { MessageHandler } from './MessageHandler';
+import { Networking } from './Networking';
+import { OnAddedCallback } from './OnAddedCallback';
+import { OnChangeCallback } from './OnChangeCallback';
+import { OnItemChangeCallback } from './OnItemChangeCallback';
+import { OnRemovedCallback } from './OnRemovedCallback';
+import { SchemaDefinition } from './SchemaDefinition';
+import { SchemaDefinitionJSON } from './SchemaDefinitionJSON';
 
 export class Room {
   private _id!: string;
   private _sendBuffer: Buffer;
   private _closeReason: string | undefined;
   private _localClientId: number = -1;
-  public get localClientId(): number {
+  private _pingTimeout: NodeJS.Timer | undefined;
+  private _lastPingTimestamp: number = Number.MAX_VALUE;
+  private _latencySamples: number[] = [];
+  /**
+   * The number of samples to use when calculating average latency.
+   * @default 10
+   * @type {number}
+   */
+  latencySampleSize: number = 10;
+  // pingDelay is the time between pings in milliseconds
+  pingDelay: number | undefined = 5000;
+
+  get currentLatency(): number {
+    return this._latencySamples[this._latencySamples.length - 1];
+  }
+  get averageLatency(): number {
+    return (
+      this._latencySamples.reduce((a, b) => a + b, 0) /
+      this._latencySamples.length
+    );
+  }
+
+  get localClientId(): number {
     return this._localClientId;
   }
 
@@ -75,7 +77,8 @@ export class Room {
     this._closeCallbacks = new Set();
     this._serverErrorCallbacks = new Set();
 
-    this._sendBuffer = Buffer.alloc(1 * 1024 * 1024);
+    // Pre-allocate 16MB buffer for sending data
+    this._sendBuffer = Buffer.alloc(16 * 1024 * 1024);
   }
 
   /**
@@ -110,10 +113,12 @@ export class Room {
   }
 
   async _internalConnect(serverAddr: string, packet: Buffer) {
+    // Set callbacks
     this._net.onOpen = this._onOpen.bind(this);
     this._net.onClose = this._onClose.bind(this);
     this._net.onMessage = this._onMessage.bind(this);
 
+    // Wait for connection
     return new Promise<void>(async (resolve, reject) => {
       this._connectResultCallback = (error) => {
         if (error) return reject(error);
@@ -126,7 +131,19 @@ export class Room {
 
       // Send init packet
       this._net.send(packet);
+
+      // Start pinging
+      this._ping();
     });
+  }
+
+  private _ping() {
+    // Clear previous timeout
+    clearTimeout(this._pingTimeout!);
+
+    // Send ping
+    this._lastPingTimestamp = Date.now();
+    this._net.send(Buffer.from([ClientProtocol.Ping]));
   }
 
   private _onOpen(e: Event) {
@@ -135,6 +152,7 @@ export class Room {
 
   private _onClose(e: Event) {
     //console.log('[Room] Disconnected from server', e);
+    clearInterval(this._pingTimeout!);
     for (const callback of this._closeCallbacks) {
       callback.call(undefined, e);
     }
@@ -143,8 +161,19 @@ export class Room {
   private _onMessage(buf: Buffer) {
     const ref: NumberRef = { value: 0 };
     const packetId = <ServerProtocol>deserializeUInt8(buf, ref);
-    //console.log('Received', ServerProtocol[packetId]);
     switch (packetId) {
+      case ServerProtocol.Ping:
+        // Calculate latency
+        const latency = Date.now() - this._lastPingTimestamp;
+        // Add new sample
+        this._latencySamples.push(latency);
+        // Remove oldest sample if we have more than latencySampleSize samples
+        if (this._latencySamples.length > this.latencySampleSize) {
+          this._latencySamples.shift();
+        }
+        // Set timeout for next ping
+        this._pingTimeout = setTimeout(() => this._ping(), this.pingDelay);
+        break;
       case ServerProtocol.UserPacket:
         this._onUserMessage(buf, ref);
         break;

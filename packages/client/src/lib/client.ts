@@ -4,7 +4,7 @@ import {
   serializeUInt8,
   serializeString,
 } from '@daisy-engine/serializer';
-import { Room } from './room';
+import { Room } from './Room';
 
 export class Client {
   private _addr: string;
