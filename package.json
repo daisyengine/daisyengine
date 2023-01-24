@@ -20,6 +20,7 @@
     "@swc/cli": "~0.1.55",
     "@swc/core": "^1.2.173",
     "@swc/jest": "0.2.20",
+    "@types/core-js": "^2.5.5",
     "@types/jest": "28.1.1",
     "@types/node": "18.7.1",
     "@typescript-eslint/eslint-plugin": "^5.36.1",

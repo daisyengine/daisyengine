@@ -18,7 +18,8 @@
     "paths": {
       "@daisy-engine/client": ["packages/client/src/index.ts"],
       "@daisy-engine/common": ["packages/common/src/index.ts"],
-      "@daisy-engine/server": ["packages/server/src/index.ts"]
+      "@daisy-engine/server": ["packages/server/src/index.ts"],
+      "@daisy-engine/ticker": ["packages/ticker/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]

@@ -25,47 +25,11 @@ export class Room {
 
   private _messageHandlers: Map<string | number, MessageHandler>;
 
-  private _tickNumber: number;
-  private _lastTime: number;
-  private _accumulator: number;
-  private _deltaTimeMs: number;
-  private _maxAccumulation: number = 25;
-  private _stopTicking: boolean;
-  private _disableBuiltinTicker: boolean;
-
-  /**
-   * Current tick number.
-   * Increased by 1 every time tick() gets called.
-   */
-  get tickNumber(): number {
-    return this._tickNumber;
-  }
-  /**
-   * Current accumulated frame time, in milliseconds.
-   */
-  get accumulator(): number {
-    return this._accumulator;
-  }
-  /**
-   * Fixed time between ticks, in seconds.
-   */
-  get deltaTime(): number {
-    return this._deltaTimeMs / 1000;
-  }
-  /**
-   * Fixed time between ticks, in milliseconds.
-   */
-  get deltaTimeMs(): number {
-    return this._deltaTimeMs;
-  }
-
   constructor(id: string, opts?: any) {
     this.id = id;
 
     this.clients = new Map();
     this._messageHandlers = new Map();
-
-    this._tickNumber = 0;
 
     this.init(opts);
     this._postInit();
@@ -80,27 +44,6 @@ export class Room {
    * Called every {@link deltaTime} milliseconds.
    */
   protected tick() {}
-
-  /**
-   * How many times should {@link tick} be called?
-   *
-   * Set to 0 if you want to disable the built-in ticker.
-   * @param ticksPerSecond Number of ticks per second.
-   */
-  setTickRate(ticksPerSecond: number) {
-    if (ticksPerSecond <= 0) this._disableBuiltinTicker = true;
-    this._deltaTimeMs = 1000 / ticksPerSecond;
-  }
-
-  /**
-   * Sets the maximum number of milliseconds that can be accumulated in one
-   * frame.
-   * @param maxAccumulation Maximum number of milliseconds that can be
-   * accumulated.
-   */
-  setMaxAccumulation(maxAccumulation: number) {
-    this._maxAccumulation = maxAccumulation;
-  }
 
   /**
    * Called before this room is closed.
@@ -261,56 +204,7 @@ export class Room {
   /**
    * Runs after {@link init}
    */
-  private _postInit() {
-    if (!this._disableBuiltinTicker) {
-      this._lastTime = this._now();
-      this._accumulator = 0;
-
-      this._stopTicking = false;
-      this._tick();
-    }
-  }
-
-  /**
-   * @returns High resolution timestamp if available
-   */
-  private _now() {
-    if (performance !== undefined) {
-      return performance.now();
-    }
-    if (window !== undefined) {
-      if (window.performance.now) {
-        return window.performance.now();
-      } else {
-        return Date.now();
-      }
-    }
-  }
-
-  /**
-   * Built-in ticker.
-   *
-   * See {@link https://gafferongames.com/post/fix_your_timestep/} for more
-   * info.
-   */
-  private _tick() {
-    const newTime = this._now();
-    const frameTime = Math.min(this._maxAccumulation, newTime - this._lastTime);
-
-    this._lastTime = newTime;
-    this._accumulator += frameTime;
-
-    while (this._accumulator >= this._deltaTimeMs) {
-      if (this._stopTicking || this._disableBuiltinTicker) return;
-
-      this.tick();
-
-      this._accumulator -= this._deltaTimeMs;
-      this._tickNumber++;
-    }
-
-    setImmediate(() => this._tick());
-  }
+  private _postInit() {}
 
   /**
    * Magically reads `data` of a message from a `Buffer`

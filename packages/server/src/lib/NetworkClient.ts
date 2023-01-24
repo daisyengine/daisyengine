@@ -82,6 +82,16 @@ export class NetworkClient {
     }
   }
 
+  /**
+   * Sends a message to this client
+   * @param event Unique identifier for this event. See {@link onMessage}
+   * for more info about event identifiers.
+   * @param data Data that will be sent to this client.
+   */
+  send<T = string | number, T2 = Buffer | string>(event: T, data: T2) {
+    this.room.send(this, event, data);
+  }
+
   _internalSend(buf: Buffer) {
     // TODO handle backpressure
     this._ws.send(buf, true);
