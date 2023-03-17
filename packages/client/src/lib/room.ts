@@ -6,6 +6,10 @@ import {
 import { MessageHandler } from './MessageHandler';
 import { Networking } from './Networking';
 
+type PacketSample = {
+  t: number;
+  s: number;
+};
 export class Room {
   private _id!: string;
   private _sendBuffer: Buffer;
@@ -14,23 +18,78 @@ export class Room {
   private _pingTimeout: NodeJS.Timer | undefined;
   private _lastPingTimestamp: number = Number.MAX_VALUE;
   private _latencySamples: number[] = [];
+
+  private _downloadedSinceLastSecond: number = 0;
+  private _uploadedSinceLastSecond: number = 0;
+
+  private _incomingBytesPerSecondSamples: number[] = [];
+  private _outgoingBytesPerSecondSamples: number[] = [];
+
+  private _totalIncomingBytes: number = 0;
+  private _totalOutgoingBytes: number = 0;
   /**
    * The number of samples to use when calculating average latency.
    * @default 10
    * @type {number}
    */
   latencySampleSize: number = 10;
+
+  /**
+   * Last N seconds to use when calculating average bytes downloaded per second.
+   * @default 10
+   * @type {number}
+   */
+  downloadSampleSize: number = 10;
+  /**
+   * Last N seconds to use when calculating average bytes uploaded per second.
+   * @default 10
+   * @type {number}
+   */
+  uploadSampleSize: number = 10;
+
   // pingDelay is the time between pings in milliseconds
   pingDelay: number | undefined = 5000;
+  private _packetSampleInterval: NodeJS.Timer | undefined;
 
   get currentLatency(): number {
     return this._latencySamples[this._latencySamples.length - 1];
   }
+
   get averageLatency(): number {
     return (
       this._latencySamples.reduce((a, b) => a + b, 0) /
       this._latencySamples.length
     );
+  }
+
+  get averageBytesDownloadedPerSecond(): number {
+    return (
+      this._incomingBytesPerSecondSamples.reduce((a, b) => a + b, 0) /
+      this._incomingBytesPerSecondSamples.length
+    );
+  }
+
+  get averageBytesUploadedPerSecond(): number {
+    return (
+      this._outgoingBytesPerSecondSamples.reduce((a, b) => a + b, 0) /
+      this._outgoingBytesPerSecondSamples.length
+    );
+  }
+
+  get bytesDownloadedSinceLastSecond(): number {
+    return this._downloadedSinceLastSecond;
+  }
+
+  get bytesUploadedSinceLastSecond(): number {
+    return this._uploadedSinceLastSecond;
+  }
+
+  get totalBytesDownloaded(): number {
+    return this._totalIncomingBytes;
+  }
+
+  get totalBytesUploaded(): number {
+    return this._totalOutgoingBytes;
   }
 
   get localClientId(): number {
@@ -57,8 +116,16 @@ export class Room {
     this._closeCallbacks = new Set();
     this._serverErrorCallbacks = new Set();
 
-    // Pre-allocate 16MB buffer for sending data
-    this._sendBuffer = Buffer.alloc(16 * 1024 * 1024);
+    // Pre-allocate 2MB buffer for sending data TODO: Make this configurable
+    this._sendBuffer = Buffer.alloc(2 * 1024 * 1024);
+  }
+
+  private _addIncomingPacketSample(n: number) {
+    this._downloadedSinceLastSecond += n;
+  }
+
+  private _addOutgoingPacketSample(n: number) {
+    this._uploadedSinceLastSecond += n;
   }
 
   /**
@@ -89,7 +156,9 @@ export class Room {
   }
 
   send(event: string | number, message: Buffer | string) {
-    this._net.send(this._packMessage(event, message));
+    const packed = this._packMessage(event, message);
+    this._addOutgoingPacketSample(packed.byteLength);
+    this._net.send(packed);
   }
 
   async _internalConnect(serverAddr: string, packet: Buffer) {
@@ -110,6 +179,7 @@ export class Room {
       await this._net.connectAsync(serverAddr);
 
       // Send init packet
+      this._addOutgoingPacketSample(packet.byteLength);
       this._net.send(packet);
 
       // Start pinging
@@ -127,12 +197,30 @@ export class Room {
   }
 
   private _onOpen(e: Event) {
-    //console.log('[Room] Connected to server %s', this._addr);
+    this._packetSampleInterval = setInterval(() => {
+      this._incomingBytesPerSecondSamples.push(this._downloadedSinceLastSecond);
+      this._outgoingBytesPerSecondSamples.push(this._uploadedSinceLastSecond);
+
+      if (this._incomingBytesPerSecondSamples.length > this.downloadSampleSize)
+        this._incomingBytesPerSecondSamples.shift();
+      if (this._outgoingBytesPerSecondSamples.length > this.uploadSampleSize)
+        this._outgoingBytesPerSecondSamples.shift();
+
+      this._downloadedSinceLastSecond = 0;
+      this._uploadedSinceLastSecond = 0;
+    }, 1000);
   }
 
   private _onClose(e: Event) {
     //console.log('[Room] Disconnected from server', e);
-    clearInterval(this._pingTimeout!);
+    clearInterval(this._pingTimeout);
+    clearInterval(this._packetSampleInterval);
+    this._latencySamples = [];
+    this._incomingBytesPerSecondSamples = [];
+    this._outgoingBytesPerSecondSamples = [];
+    this._downloadedSinceLastSecond = 0;
+    this._uploadedSinceLastSecond = 0;
+
     for (const callback of this._closeCallbacks) {
       callback.call(undefined, e);
     }
@@ -142,6 +230,8 @@ export class Room {
     const ref: NumberRef = { value: 0 };
 
     const packetId = <ServerProtocol>buf[ref.value++];
+    if (packetId !== ServerProtocol.Ping)
+      this._addIncomingPacketSample(buf.byteLength);
 
     switch (packetId) {
       case ServerProtocol.Ping:

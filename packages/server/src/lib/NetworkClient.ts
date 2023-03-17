@@ -9,7 +9,7 @@ import { Room } from './Room';
  */
 const CLOSE_DELAY = 2500;
 export class NetworkClient {
-  static _lastClientId: number = 0;
+  static _lastClientId: number = 1;
   private _ws: uWS.WebSocket;
 
   readonly id: number;

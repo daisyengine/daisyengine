@@ -1,7 +1,7 @@
 import { ClientProtocol } from '@daisy-engine/common';
 import { Room } from './Room';
 
-export const joinDaisyRoom = async (
+export const joinRoom = async (
   addr: string,
   id: string,
   authString = ''

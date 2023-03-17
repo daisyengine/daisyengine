@@ -7,6 +7,11 @@ const BUFFER_SIZE = 16 * 1024 * 1024;
 const BUFFER = Buffer.alloc(BUFFER_SIZE);
 type MessageHandler = (client: NetworkClient, message: Buffer | string) => void;
 
+type QueuedEvent = {
+  client: NetworkClient;
+  data: Buffer;
+};
+
 export class Room {
   /** Unique ID of this room */
   readonly id: string;
@@ -24,6 +29,10 @@ export class Room {
   clients: Map<number, NetworkClient>;
 
   private _messageHandlers: Map<string | number, MessageHandler>;
+
+  private _eventQueue: (() => void)[] = [];
+  private _joinQueue: NetworkClient[] = [];
+  private _leaveQueue: NetworkClient[] = [];
 
   constructor(id: string, opts?: any) {
     this.id = id;
@@ -127,6 +136,37 @@ export class Room {
   }
 
   /**
+   * Processes all queued events.
+   * This method should be called every tick, preferably before ticking game
+   * logic.
+   */
+  processEvents() {
+    // Process join queue
+    while (this._joinQueue.length > 0) {
+      const client = this._joinQueue.shift();
+
+      this._sendClientId(client);
+      this._sendRoomInfo(client);
+      this.clients.set(client.id, client);
+      this.onClientJoined(client);
+    }
+
+    // Process leave queue
+    while (this._leaveQueue.length > 0) {
+      const client = this._leaveQueue.shift();
+
+      this.clients.delete(client.id);
+      this.onClientLeft(client);
+    }
+
+    // Process event queue
+    while (this._eventQueue.length > 0) {
+      const event = this._eventQueue.shift();
+      event();
+    }
+  }
+
+  /**
    * Called before this room is closed.
    * @internal
    */
@@ -139,13 +179,7 @@ export class Room {
    * @internal
    */
   _internalOnOpen(client: NetworkClient) {
-    this._sendClientId(client);
-    this._sendRoomInfo(client);
-    this.clients.set(client.id, client);
-
-    //console.log(`Client ${client.id} connected`);
-
-    this.onClientJoined(client);
+    this._joinQueue.push(client);
   }
 
   /**
@@ -153,11 +187,7 @@ export class Room {
    * @internal
    */
   _internalOnClose(client: NetworkClient, code: number, reason: Buffer) {
-    this.clients.delete(client.id);
-
-    //console.log(`Client ${client.id} disconnected (Code ${code})`);
-
-    this.onClientLeft(client);
+    this._leaveQueue.push(client);
   }
 
   /**
@@ -171,12 +201,11 @@ export class Room {
       case 0: {
         // Number event
         const event = buf.readUInt8(ref.value++);
+        const content = this._getUserMessageContent(buf, ref);
 
-        this._messageHandlers[event]?.call(
-          this,
-          client,
-          this._getUserMessageContent(buf, ref)
-        );
+        this._eventQueue.push(() => {
+          this._messageHandlers[event]?.call(this, client, content);
+        });
         break;
       }
       case 1: {
@@ -189,12 +218,11 @@ export class Room {
           ref.value + eventLength * 2
         );
         ref.value += eventLength * 2;
+        const content = this._getUserMessageContent(buf, ref);
 
-        this._messageHandlers[event]?.call(
-          this,
-          client,
-          this._getUserMessageContent(buf, ref)
-        );
+        this._eventQueue.push(() => {
+          this._messageHandlers[event]?.call(this, client, content);
+        });
 
         break;
       }
@@ -216,7 +244,7 @@ export class Room {
     switch (dataType) {
       case 0:
         // Buffer data
-        return buf.subarray(ref.value);
+        return Uint8Array.prototype.slice.call(buf, ref.value++);
       case 1:
         // String data
         const dataLength = buf.readUInt16LE(ref.value);

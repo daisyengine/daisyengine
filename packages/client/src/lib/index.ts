@@ -1,2 +1,2 @@
-export { joinDaisyRoom } from './Client';
+export { joinRoom } from './Client';
 export { Room } from './Room';
