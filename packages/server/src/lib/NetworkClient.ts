@@ -30,11 +30,6 @@ export class NetworkClient {
   status: ClientStatus = ClientStatus.CONNECTED;
 
   /**
-   * Tick number of the latest state update sent to this client.
-   */
-  lastSentStateUpdateTick: number = Number.NEGATIVE_INFINITY;
-
-  /**
    * Custom data associated with this NetworkClient. You may set this to
    * anything.
    */
