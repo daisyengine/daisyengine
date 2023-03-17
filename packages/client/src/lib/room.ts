@@ -122,10 +122,12 @@ export class Room {
 
   private _addIncomingPacketSample(n: number) {
     this._downloadedSinceLastSecond += n;
+    this._totalIncomingBytes += n;
   }
 
   private _addOutgoingPacketSample(n: number) {
     this._uploadedSinceLastSecond += n;
+    this._totalOutgoingBytes += n;
   }
 
   /**
@@ -220,6 +222,8 @@ export class Room {
     this._outgoingBytesPerSecondSamples = [];
     this._downloadedSinceLastSecond = 0;
     this._uploadedSinceLastSecond = 0;
+    this._totalIncomingBytes = 0;
+    this._totalOutgoingBytes = 0;
 
     for (const callback of this._closeCallbacks) {
       callback.call(undefined, e);
