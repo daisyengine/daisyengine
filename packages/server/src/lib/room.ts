@@ -5,12 +5,10 @@ import { NumberRef, ServerProtocol } from '@daisy-engine/common';
 // Pre-allocate 16MB buffer for sending data
 const BUFFER_SIZE = 16 * 1024 * 1024;
 const BUFFER = Buffer.alloc(BUFFER_SIZE);
-type MessageHandler = (client: NetworkClient, message: Buffer | string) => void;
-
-type QueuedEvent = {
-  client: NetworkClient;
-  data: Buffer;
-};
+type MessageHandler = (
+  client: NetworkClient,
+  message: Buffer | string | number | object
+) => void;
 
 export class Room {
   /** Unique ID of this room */
@@ -115,7 +113,7 @@ export class Room {
    * for more info about event identifiers.
    * @param data Data that will be sent to this client.
    */
-  send<T = string | number, T2 = Buffer | string>(
+  send<T = string | number, T2 = Buffer | string | number | object>(
     client: NetworkClient,
     event: T,
     data: T2
@@ -130,7 +128,10 @@ export class Room {
    * for more info about event identifiers.
    * @param data Data that will be broadcasted.
    */
-  broadcast<T = string | number, T2 = Buffer | string>(event: T, data: T2) {
+  broadcast<T = string | number, T2 = Buffer | string | number | object>(
+    event: T,
+    data: T2
+  ) {
     const msg = this._packMessage(event, data);
     this._broadcast(msg);
   }
@@ -242,10 +243,11 @@ export class Room {
     const dataType = buf.readUInt8(ref.value++);
 
     switch (dataType) {
-      case 0:
+      case 0: {
         // Buffer data
         return Uint8Array.prototype.slice.call(buf, ref.value++);
-      case 1:
+      }
+      case 1: {
         // String data
         const dataLength = buf.readUInt16LE(ref.value);
         ref.value += 2;
@@ -256,6 +258,32 @@ export class Room {
         );
         ref.value += dataLength * 2;
         return data;
+      }
+      case 2: {
+        // Number data
+        const data = buf.readUInt32LE(ref.value);
+        ref.value += 4;
+        return data;
+      }
+      case 3: {
+        // Float data
+        const data = buf.readFloatLE(ref.value);
+        ref.value += 4;
+        return data;
+      }
+      case 4: {
+        // JSON data
+        const dataLength = buf.readUInt16LE(ref.value);
+        ref.value += 2;
+        const data = buf.toString(
+          'utf16le',
+          ref.value,
+          ref.value + dataLength * 2
+        );
+        ref.value += dataLength * 2;
+
+        return JSON.parse(data);
+      }
       default:
         throw new Error(`Invalid dataType for message: ${dataType}`);
     }
@@ -266,10 +294,10 @@ export class Room {
    * understand.
    * @internal
    */
-  private _packMessage<T = string | number, T2 = Buffer | string>(
-    event: T,
-    data: T2
-  ) {
+  private _packMessage<
+    T = string | number,
+    T2 = Buffer | string | number | object
+  >(event: T, data: T2) {
     let ref: NumberRef = { value: 0 };
     //serializeUInt8(ServerProtocol.UserPacket, BUFFER, ref);
     BUFFER.writeUInt8(ServerProtocol.UserPacket, ref.value++);
@@ -295,6 +323,26 @@ export class Room {
       BUFFER.writeUInt16LE(data.length, ref.value);
       ref.value += 2;
       ref.value += BUFFER.write(data, ref.value, 'utf16le');
+    } else if (typeof data === 'number') {
+      // Data is number
+      // Check if it's an integer or a float
+      if (Number.isInteger(data)) {
+        // Integer
+        BUFFER.writeUInt8(2, ref.value++);
+        BUFFER.writeUInt32LE(data, ref.value);
+      } else {
+        // Float
+        BUFFER.writeUInt8(3, ref.value++);
+        BUFFER.writeFloatLE(data, ref.value);
+      }
+      ref.value += 4;
+    } else if (typeof data === 'object') {
+      // Data is object
+      BUFFER.writeUInt8(4, ref.value++);
+      const json = JSON.stringify(data);
+      BUFFER.writeUInt16LE(json.length, ref.value);
+      ref.value += 2;
+      ref.value += BUFFER.write(json, ref.value, 'utf16le');
     }
 
     return BUFFER.subarray(0, ref.value);

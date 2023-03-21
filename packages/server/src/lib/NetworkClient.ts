@@ -83,7 +83,10 @@ export class NetworkClient {
    * for more info about event identifiers.
    * @param data Data that will be sent to this client.
    */
-  send<T = string | number, T2 = Buffer | string>(event: T, data: T2) {
+  send<T = string | number, T2 = Buffer | string | number | object>(
+    event: T,
+    data: T2
+  ) {
     this.room.send(this, event, data);
   }
 

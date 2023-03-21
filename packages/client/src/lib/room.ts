@@ -157,7 +157,7 @@ export class Room {
     this._serverErrorCallbacks.add(callback);
   }
 
-  send(event: string | number, message: Buffer | string) {
+  send(event: string | number, message: Buffer | string | number | object) {
     const packed = this._packMessage(event, message);
     this._addOutgoingPacketSample(packed.byteLength);
     this._net.send(packed);
@@ -365,10 +365,11 @@ export class Room {
     const dataType = buf[ref.value++];
 
     switch (dataType) {
-      case 0:
+      case 0: {
         // Buffer data
         return buf.subarray(ref.value);
-      case 1:
+      }
+      case 1: {
         // String data
         const dataLen = buf.readUInt16LE(ref.value);
         ref.value += 2;
@@ -380,6 +381,34 @@ export class Room {
         ref.value += dataLen * 2;
 
         return data;
+      }
+      case 2: {
+        // Integer data
+        const data = buf.readInt32LE(ref.value);
+        ref.value += 4;
+
+        return data;
+      }
+      case 3: {
+        // Float data
+        const data = buf.readFloatLE(ref.value);
+        ref.value += 4;
+
+        return data;
+      }
+      case 4: {
+        // JSON data
+        const dataLen = buf.readUInt16LE(ref.value);
+        ref.value += 2;
+        const data = buf.toString(
+          'utf16le',
+          ref.value,
+          ref.value + dataLen * 2
+        );
+        ref.value += dataLen * 2;
+
+        return JSON.parse(data);
+      }
       default:
         throw new Error(`Invalid dataType for message: ${dataType}`);
     }
@@ -390,10 +419,10 @@ export class Room {
    * understand.
    * @internal
    */
-  private _packMessage<T = string | number, T2 = Buffer | string>(
-    event: T,
-    data: T2
-  ) {
+  private _packMessage<
+    T = string | number,
+    T2 = Buffer | string | number | object
+  >(event: T, data: T2) {
     let ref: NumberRef = { value: 0 };
     this._sendBuffer.writeUInt8(ClientProtocol.UserPacket, ref.value++);
 
@@ -419,6 +448,26 @@ export class Room {
       this._sendBuffer.writeUInt16LE(data.length, ref.value);
       ref.value += 2;
       ref.value += this._sendBuffer.write(data, ref.value, 'utf16le');
+    } else if (typeof data == 'number') {
+      // Check if data is integer
+      if (Number.isInteger(data)) {
+        // Data is integer
+        this._sendBuffer.writeUInt8(2, ref.value++);
+        this._sendBuffer.writeInt32LE(data, ref.value);
+        ref.value += 4;
+      } else {
+        // Data is float
+        this._sendBuffer.writeUInt8(3, ref.value++);
+        this._sendBuffer.writeFloatLE(data, ref.value);
+        ref.value += 4;
+      }
+    } else if (typeof data == 'object') {
+      // Data is JSON
+      const json = JSON.stringify(data);
+      this._sendBuffer.writeUInt8(4, ref.value++);
+      this._sendBuffer.writeUInt16LE(json.length, ref.value);
+      ref.value += 2;
+      ref.value += this._sendBuffer.write(json, ref.value, 'utf16le');
     }
 
     return this._sendBuffer.subarray(0, ref.value);

@@ -1,1 +1,3 @@
-export type MessageHandler = (message: Buffer | string) => void;
+export type MessageHandler = (
+  message: Buffer | string | number | object
+) => void;
